@@ -1,0 +1,5 @@
+org_id              = "179248107504"
+identity_project_id = "rwlab-vpcsc-adm-46bc"
+github_repository   = "CptDolphin/gcp-vpc-sc"
+state_bucket        = "rwlab-vpcsc-tfstate-46bc"
+contracts_bucket    = "rwlab-vpcsc-contracts-46bc"

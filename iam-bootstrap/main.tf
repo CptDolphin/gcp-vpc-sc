@@ -76,6 +76,10 @@ locals {
     "roles/cloudasset.viewer",                 # pre-flight: czy projekt istnieje, czy nie jest w innym perimetrze
     "roles/compute.networkViewer",             # pre-flight: Private Google Access na podsieciach
     "roles/dns.reader",                        # pre-flight: strefa DNS kierująca googleapis.com na restricted VIP
+    # Metryki i alerty perimetru (terraform/monitoring.tf) są w stanie, więc `plan` MUSI umieć je odczytać —
+    # inaczej odświeżenie stanu pada na `Error when reading MonitoringAlertPolicy`, mimo że konto nic nie
+    # zmienia. `viewer`, nie `editor`: czytanie do planu, zapisywanie zostaje przy `apply`. (Issue #1904)
+    "roles/monitoring.viewer",
   ]
 }
 
@@ -103,6 +107,29 @@ resource "google_organization_iam_member" "plan_logging_viewer" {
   member = "serviceAccount:${google_service_account.plan.email}"
 }
 
+# Listowanie bucketa stanu — BEZ warunku, i to jest konieczne, nie niedopatrzenie.
+#
+# Backend GCS Terraforma przy każdym `init`/`plan` woła `storage.objects.list`, żeby wyliczyć workspace'y.
+# Zasobem tego wywołania jest BUCKET, nie obiekt — więc warunek `resource.name.startsWith(".../objects/...")`
+# z bindingu niżej NIGDY na nie nie pasuje i pipeline pada na:
+#
+#   Failed to get existing workspaces: googleapi: Error 403: ... does not have storage.objects.list access
+#
+# Zmierzone na żywym wdrożeniu (Issue #1904): least-privilege zawężony wyłącznie do prefiksu obiektów
+# uniemożliwiał uruchomienie pipeline'u, który ten stack ma obsługiwać. `legacyBucketReader` daje dokładnie
+# dwie rzeczy — `storage.buckets.get` i `storage.objects.list` — i ANI JEDNEGO prawa do treści obiektów.
+# Zawężenie do prefiksu zostaje tam, gdzie realnie chroni: przy odczycie i zapisie stanu (binding niżej).
+resource "google_storage_bucket_iam_member" "state_list" {
+  for_each = {
+    plan  = google_service_account.plan.email
+    apply = google_service_account.apply.email
+  }
+
+  bucket = var.state_bucket
+  role   = "roles/storage.legacyBucketReader"
+  member = "serviceAccount:${each.value}"
+}
+
 # Stan Terraform. Warunek IAM zawęża dostęp do PREFIKSU, a nie do całego bucketa — jeśli trzymacie tam
 # stany innych zespołów, tamte pozostają poza zasięgiem tych kont.
 resource "google_storage_bucket_iam_member" "state" {
@@ -124,14 +151,37 @@ resource "google_storage_bucket_iam_member" "state" {
 }
 
 # --- 3b. bucket kontraktów -------------------------------------------------------------------------
-# Kontrakt to wąski JSON publikowany po apply dla repozytoriów zespołów (terraform/contract.tf w repo
-# perimetru). Dwa ROZŁĄCZNE ACL to rdzeń tej konstrukcji:
+# Kontrakt to wąski JSON publikowany po apply (terraform/contract.tf w repo perimetru). Dwa ROZŁĄCZNE ACL
+# to rdzeń tej konstrukcji:
 #   writer  = sa-vpcsc-apply, tylko na prefiksie kontraktu — pisze swój plik, nie cudze;
-#   reader  = grupy dywizji, READ-ONLY — konsument nie może podmienić danych, którym ufa kolejny konsument.
+#   reader  = konsumenci maszynowi, READ-ONLY — konsument nie może podmienić danych, którym ufa kolejny.
 #
-# Gdyby zespół mógł nadpisać kontrakt, dopisałby sobie projekt do allowed_projects i jego własna walidacja
+# Gdyby konsument mógł nadpisać kontrakt, dopisałby sobie projekt do allowed_projects i jego własna walidacja
 # lokalna przestałaby cokolwiek znaczyć (bramki w repo perimetru by go zatrzymały, ale zobaczyłby „zielono"
 # u siebie i zdziwił się dopiero po odrzuceniu).
+#
+# UWAGA na zakres: repozytoria dywizji NIE potrzebują już tego grantu. Kontrakt jedzie do nich jako asset
+# release'u w repo perimetru — tą samą drogą co paczka bucketowych bramek i tym samym tokenem GitHuba
+# (apply.yml, krok „apply + publikacja kontraktu"). `contract_reader_groups` zostaje wyłącznie dla
+# konsumentów SPOZA GitHuba: jobów w GCP, skryptów operacyjnych, hurtowni. Pusta lista jest tu poprawnym,
+# najczęstszym ustawieniem — a nie brakiem konfiguracji.
+
+# Konto `plan` musi UMIEĆ ODCZYTAĆ opublikowany kontrakt — nie żeby go konsumować, tylko dlatego, że
+# `terraform plan` odświeża stan, a w stanie siedzi `google_storage_bucket_object.contract`. Bez tego prawa
+# każdy plan pada na `Error 403: Permission 'storage.objects.get' denied` na buckecie kontraktów, mimo że
+# konto nie ma niczego zmieniać. Zmierzone na żywym wdrożeniu (Issue #1904).
+resource "google_storage_bucket_iam_member" "contract_reader_plan" {
+  count = var.contracts_bucket == "" ? 0 : 1
+
+  bucket = var.contracts_bucket
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.plan.email}"
+
+  condition {
+    title      = "only-vpc-sc-contract-prefix"
+    expression = "resource.name.startsWith(\"projects/_/buckets/${var.contracts_bucket}/objects/${var.contract_prefix}\")"
+  }
+}
 
 resource "google_storage_bucket_iam_member" "contract_writer" {
   count = var.contracts_bucket == "" ? 0 : 1
@@ -151,7 +201,12 @@ resource "google_storage_bucket_iam_member" "contract_reader" {
 
   bucket = var.contracts_bucket
   # objectViewer, NIE objectAdmin: konsument czyta i nic więcej.
-  role   = "roles/storage.objectViewer"
+  role = "roles/storage.objectViewer"
+  # Prefiks `group:` doklejamy TUTAJ, a zmienna przyjmuje sam adres (jej walidacja odrzuca wszystko
+  # z dwukropkiem). Dzięki temu innego typu principala nie da się w tym wejściu nawet wyrazić: `allUsers`,
+  # konto osoby czy `domain:` nie przechodzą, bo jedyne, co ten zasób potrafi zbudować, to grupa. Gdyby
+  # prefiks wędrował w zmiennej, ta własność zniknęłaby i przed upublicznieniem kontraktu broniłby wyłącznie
+  # tekstowy warunek walidacji.
   member = "group:${each.value}"
 
   condition {
