@@ -1,0 +1,27 @@
+# PLIK TESTOWY — ma zostać ODRZUCONY przez bramkę `validate`, nie zmergowany.
+#
+# Wciąga projekt administracyjny perimetru (bucket stanu Terraform, bucket kontraktów, monitoring) jako
+# członka. Jest to jedyna awaria tego repozytorium, której `git revert` nie cofa: po promocji do enforced
+# konto apply traci dostęp do własnego stanu, bo pipeline woła z GitHub Actions, czyli spoza granicy.
+#
+# Bramka ma odrzucić ten plik NIEZALEŻNIE od pola `stage` — dlatego stoi tu `dry-run`, czyli wartość
+# pozornie najbezpieczniejsza. Test pozytywny („dobry plik przechodzi") już mamy; ten jest jego brakującą
+# połową: bramka, która nigdy nie odrzuca, przechodzi każdy test i nie chroni niczego.
+schema_version: 1
+division: lab
+project_id: rwlab-vpcsc-adm-46bc
+project_number: '53079972993'
+owner_group: lab@rafalwalas.com
+change_ref: 'manual:test negatywny bramki control_plane_projects — PR ma zostac odrzucony'
+approved_by: mail@rafalwalas.com
+stage: dry-run
+dry_run_since: '2026-08-10'
+review_by: '2027-02-06'
+profiles:
+- name: vertex-online-serving
+  params:
+    caller_identities:
+    - serviceAccount:sa-vpcsc-caller@rwlab-vpcsc-adm-46bc.iam.gserviceaccount.com
+    access_levels:
+    - corp_network
+exceptions: []
