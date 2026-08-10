@@ -66,11 +66,19 @@ jobs:
       # We re-plan on main and apply that plan. WHY not reuse the PR artifact: main may have moved between
       # review and merge (another division's PR), and applying a stale plan would silently revert it.
       # The safety here comes from the human gate above plus the policy gates that run again below.
+      #
+      # `-chdir` przenosi katalog roboczy WYLACZNIE terraformowi — przekierowanie `>` wykonuje powloka
+      # w katalogu joba, czyli w korzeniu repo. `> plan.json` kladlo wiec plik obok `terraform/`, a krok
+      # nizej czyta `terraform/plan.json`. Efekt: `stat terraform/plan.json: no such file or directory`
+      # PO udanym planie — bramki OPA na granicy nie wykonaly sie ANI RAZU, a `apply` nie doszedl do
+      # `terraform apply` w zadnym przebiegu w historii repozytorium. Ten sam defekt naprawiono juz
+      # w `plan.yml`; `apply.yml` zostal wtedy pominiety, mimo ze ma te sama pare producent/konsument.
+      # Sciezka jest wypisana wprost, zeby oba kroki zgadzaly sie bez wiedzy o tym, czym `-chdir` jest.
       - name: plan on main
         run: |
           terraform -chdir=terraform init -input=false
           terraform -chdir=terraform plan -input=false -lock-timeout=10m -out=tfplan.binary
-          terraform -chdir=terraform show -json tfplan.binary > plan.json
+          terraform -chdir=terraform show -json tfplan.binary > terraform/plan.json
 
       - name: install conftest
         run: |
@@ -80,8 +88,14 @@ jobs:
           sudo mv /tmp/conftest /usr/local/bin/
 
       # Gates run AGAIN here. A gate that only runs on the PR protects the PR, not the boundary.
+      #
+      # `--data perimeter/policy.yaml` MUSI byc takie samo jak w `plan.yml`. To wejscie mowi regulom, dla
+      # ktorych uslug API nie publikuje zadnych metod — bez niego zbior jest pusty i kazda regula z `"*"`
+      # jest odrzucana (fail-closed). Rozjazd tego argumentu miedzy PR-em a granica znaczy, ze „te same
+      # bramki" wcale nie sa te same: PR swieci na zielono, a apply na main odrzuca zmiane, ktora przeszla
+      # review — albo odwrotnie, gdyby kiedys ubylo argumentu po tamtej stronie.
       - name: policy gates on the plan
-        run: conftest test --policy policy --namespace vpcsc.perimeter terraform/plan.json
+        run: conftest test --policy policy --data perimeter/policy.yaml --namespace vpcsc.perimeter terraform/plan.json
 
       # JEDEN KROK, DWIE PUBLIKACJE — i to jest sedno tej konstrukcji, nie oszczędność linijek.
       #
