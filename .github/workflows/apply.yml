@@ -67,13 +67,13 @@ jobs:
       # review and merge (another division's PR), and applying a stale plan would silently revert it.
       # The safety here comes from the human gate above plus the policy gates that run again below.
       #
-      # `-chdir` przenosi katalog roboczy WYLACZNIE terraformowi — przekierowanie `>` wykonuje powloka
-      # w katalogu joba, czyli w korzeniu repo. `> plan.json` kladlo wiec plik obok `terraform/`, a krok
-      # nizej czyta `terraform/plan.json`. Efekt: `stat terraform/plan.json: no such file or directory`
-      # PO udanym planie — bramki OPA na granicy nie wykonaly sie ANI RAZU, a `apply` nie doszedl do
-      # `terraform apply` w zadnym przebiegu w historii repozytorium. Ten sam defekt naprawiono juz
-      # w `plan.yml`; `apply.yml` zostal wtedy pominiety, mimo ze ma te sama pare producent/konsument.
-      # Sciezka jest wypisana wprost, zeby oba kroki zgadzaly sie bez wiedzy o tym, czym `-chdir` jest.
+      # `-chdir` przenosi katalog roboczy WYŁĄCZNIE terraformowi — przekierowanie `>` wykonuje powłoka
+      # w katalogu joba, czyli w korzeniu repo. `> plan.json` kładło więc plik obok `terraform/`, a krok
+      # niżej czyta `terraform/plan.json`. Efekt: `stat terraform/plan.json: no such file or directory`
+      # PO udanym planie — bramki OPA na granicy nie wykonały się ANI RAZU, a `apply` nie doszedł do
+      # `terraform apply` w żadnym przebiegu. Ten sam defekt naprawiono wcześniej w `plan.yml`;
+      # `apply.yml` został wtedy pominięty, mimo że ma tę samą parę producent/konsument — dlatego test
+      # ścieżek w selftescie chodzi teraz po OBU workflowach, nie po jednym.
       - name: plan on main
         run: |
           terraform -chdir=terraform init -input=false
@@ -89,11 +89,11 @@ jobs:
 
       # Gates run AGAIN here. A gate that only runs on the PR protects the PR, not the boundary.
       #
-      # `--data perimeter/policy.yaml` MUSI byc takie samo jak w `plan.yml`. To wejscie mowi regulom, dla
-      # ktorych uslug API nie publikuje zadnych metod — bez niego zbior jest pusty i kazda regula z `"*"`
-      # jest odrzucana (fail-closed). Rozjazd tego argumentu miedzy PR-em a granica znaczy, ze „te same
-      # bramki" wcale nie sa te same: PR swieci na zielono, a apply na main odrzuca zmiane, ktora przeszla
-      # review — albo odwrotnie, gdyby kiedys ubylo argumentu po tamtej stronie.
+      # `--data perimeter/policy.yaml` MUSI być takie samo jak w `plan.yml`. To wejście mówi regułom, dla
+      # których usług API nie publikuje żadnych metod — bez niego zbiór jest pusty i każda reguła z `"*"`
+      # jest odrzucana (fail-closed). Rozjazd tego argumentu między pull requestem a granicą znaczy, że
+      # „te same bramki" wcale nie są te same: PR świeci na zielono, a apply na gałęzi domyślnej odrzuca
+      # zmianę, która przeszła review — albo odwrotnie.
       - name: policy gates on the plan
         run: conftest test --policy policy --data perimeter/policy.yaml --namespace vpcsc.perimeter terraform/plan.json
 
