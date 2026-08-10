@@ -78,11 +78,17 @@ vpc_accessible_services:
 # Gdy wciągnięcie takiego projektu jest naprawdę zamierzone (np. stan przeniesiony poza perimetr), NIE
 # usuwaj go z tej listy — użyj pola `control_plane_exception` w pliku członka. Usunięcie z listy wygląda
 # w diffie jak sprzątanie; jawny wyjątek z uzasadnieniem wygląda na to, czym jest.
-control_plane_projects: []
-# Przykład wypełnionej listy:
-# control_plane_projects:
-#   - prj-example-vpcsc-admin
-#   - "123456789012"
+#
+# W TEJ ORGANIZACJI jest dokładnie jeden taki projekt i pełni WSZYSTKIE trzy role naraz — dlatego lista
+# jest krótka, a nie dlatego, że nie została wypełniona:
+#   * `state_bucket` = rwlab-vpcsc-tfstate-46bc  (backend w terraform/versions.tf)  -> ten projekt
+#   * `contract.bucket` = rwlab-vpcsc-contracts-46bc                                -> ten projekt
+#   * `monitoring.project_id` (niżej w tym pliku)                                   -> ten projekt
+# Wpisany OBIEMA formami — ID i numerem — bo bramka dopasowuje `project_id` ALBO `project_number`, a plik
+# członka może nieść dowolny z nich. Jedna forma zostawiłaby obejście na wybór formatu w zgłoszeniu.
+control_plane_projects:
+  - rwlab-vpcsc-adm-46bc
+  - "53079972993"
 
 # Usługi, dla których Access Context Manager NIE PUBLIKUJE listy wspieranych metod — sprawdź komendą
 # `gcloud access-context-manager supported-services describe <usluga>`: pole `supportedMethods` jest puste.
