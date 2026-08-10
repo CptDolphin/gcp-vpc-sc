@@ -27,20 +27,13 @@ locals {
     path   = ""
   }
 
-  # Zużycie budżetu atrybutów liczone tak samo jak w outputs.tf — zespół widzi, ile miejsca zostało,
-  # zanim poprosi o profil, który go zje.
+  # Zużycie budżetu atrybutów — TA SAMA wartość co w `attribute_estimate` (outputs.tf), bo obie czytają
+  # `local.attribute_usage_*` z locals.tf. Zespół widzi, ile miejsca zostało, zanim poprosi o profil,
+  # który je zje, i widzi DOKŁADNIE tę liczbę, na którą pada guard CI — nie drugie wyliczenie tego samego.
   contract_budget = {
     limit_per_config = local.policy.attribute_budget.limit_per_config
-    used_dry_run = sum(concat([0], [
-      for k, r in merge(local.ingress_rules_all, local.egress_rules_all) :
-      length(r.identities) + length(lookup(r, "access_levels", [])) + length(r.resources)
-      + sum(concat([0], [for op in r.operations : 1 + length(op.methods)]))
-    ]))
-    used_enforced = sum(concat([0], [
-      for k, r in merge(local.ingress_rules_enforced, local.egress_rules_enforced) :
-      length(r.identities) + length(lookup(r, "access_levels", [])) + length(r.resources)
-      + sum(concat([0], [for op in r.operations : 1 + length(op.methods)]))
-    ]))
+    used_dry_run     = local.attribute_usage_dry_run
+    used_enforced    = local.attribute_usage_enforced
   }
 
   contract_document = {
@@ -116,4 +109,41 @@ resource "google_storage_bucket_object" "contract" {
       error_message = "Kontrakt i stan Terraform NIE MOGĄ leżeć w tym samym buckecie (perimeter/policy.yaml §contract)."
     }
   }
+}
+
+# --- druga publikacja: ten sam kontrakt jako asset release'u --------------------------------------------
+#
+# DLACZEGO DWA MIEJSCA. Pobranie kontraktu z bucketa wymaga od repozytorium dywizji TOŻSAMOŚCI W GCP
+# (WIF + konto serwisowe) i grantu na prefiksie kontraktu. Przy trzydziestu dywizjach to trzydzieści grantów
+# po to, żeby przeczytać 4 KB — a zdanie „zespół nie dostaje ŻADNYCH uprawnień w GCP" przestaje być faktem
+# dokładnie w tym miejscu. Asset release'u pobiera się tokenem GitHuba, który zespół i tak musi mieć: paczka
+# bramek (`gates.tar.gz`) jedzie tą samą drogą i tym samym `contents: read`. Druga publikacja NIE dokłada
+# więc ani jednego nowego uprawnienia po żadnej ze stron. Bucket zostaje dla konsumentów maszynowych spoza
+# GitHuba (skrypty, joby w GCP) — tam nic się nie zmienia.
+#
+# DLACZEGO OUTPUT CZYTA ATRYBUT ZASOBU, a nie liczy `jsonencode(local.contract_document)` po raz drugi:
+# drugie wyliczenie jest DRUGIM RENDEREM tych samych danych, a dwa rendery mogą się rozjechać (inne wejście,
+# inny apply, apply przerwany w połowie). Tutaj bajty assetu to DOKŁADNIE te bajty, które Terraform wysłał
+# do bucketa. To jest cała treść wymagania „jedna publikacja, dwa miejsca": rozjazd nie jest mało
+# prawdopodobny — jest niewyrażalny, bo nie ma drugiego źródła, z którego mógłby powstać.
+#
+# `one(...)` zamiast `[0]`: przy wyłączonej sekcji `contract` zasobu nie ma, więc output jest `null`,
+# a krok apply mówi wprost „nie ma czego publikować". `[0]` wywracałby wtedy apply na indeksie — czyli
+# sekcja opisana jako opcjonalna znowu byłaby obowiązkowa (ten sam błąd co z atrapą `local.contract` wyżej).
+output "contract_json" {
+  description = "Treść opublikowanego kontraktu — DOKŁADNIE te bajty, które poszły do bucketa. null, gdy policy.yaml nie ma sekcji `contract`."
+  # `sensitive` NIE dlatego, że kontrakt jest sekretem (nie jest — to jawna wewnętrznie lista interfejsów),
+  # tylko dlatego, że atrybut `content` jest sensitive w providerze. Bez tej flagi `terraform validate`
+  # odmawia eksportu wartości pochodzącej z wrażliwego atrybutu.
+  sensitive = true
+  value     = one(google_storage_bucket_object.contract[*].content)
+}
+
+# Suma kontrolna POLICZONA PRZEZ GCS z obiektu, który realnie wylądował w buckecie (atrybut `computed`,
+# wypełniany odpowiedzią API). Krok apply porównuje ją z sumą pliku, który wgrywa do release'u — dzięki temu
+# weryfikacja patrzy na DRUGĄ STRONĘ publikacji, a nie sama na siebie. Własne `md5(jsonencode(...))` byłoby
+# tautologią: zgadzałoby się także wtedy, gdyby do bucketa nie poszło nic.
+output "contract_md5" {
+  description = "Base64 MD5 obiektu kontraktu, policzone przez GCS. null przy wyłączonej sekcji `contract`."
+  value       = one(google_storage_bucket_object.contract[*].md5hash)
 }

@@ -27,12 +27,20 @@ a nie HCL.
 | `aiplatform.googleapis.com` w `restricted_services` | `precondition` w `perimeter.tf` + reguła OPA w `onboarding.rego` | perimeter wygląda na włączony i nie chroni tego, dla czego powstał (DEC-1) |
 | `use_explicit_dry_run_spec = true` **zawsze** | `perimeter.tf` | bez tego nie istnieje członek „tylko w dry-run", czyli nie da się etapować onboardingu (DEC-4) |
 | `lifecycle.ignore_changes` na listach szkieletu | `perimeter.tf` | szkielet i zasoby per-członek biją się o te same listy: każdy apply kasuje to, co dodał poprzedni (DEC-6) |
+| Reguły ingress mają `depends_on` na `access_level` | `rules.tf` + asercja selftestu czytająca `terraform graph` | access level jest referowany po NAZWIE, więc bez tej pozycji graf nie ma krawędzi i `destroy` kasuje poziom, gdy reguła jeszcze go używa: `you must first remove the reference`. Wychodzi dopiero przy offboardingu członka, czyli w momencie, w którym nikt nie chce debugować granicy |
 | Nowy członek zawsze `stage: dry-run` | `render_member.py` + reguła OPA | wejście od razu do konfiguracji egzekwowanej odcina cudzą produkcję po merge'u (DEC-4) |
+| `stage`, `dry_run_since`, `review_by`, `change_ref` wpisuje **strona perimetru**, nigdy wnioskodawca | `render_member.py`, `external-intake.yml`, uzupełnianie w `validate-local.sh` + `test_przyklad_repo_dywizji` | `dry_run_since` z datą wsteczną sprawia, że bramka promocji liczy okno obserwacji jako dawno minione — 14 dni pomiaru, dla których istnieje DEC-4, znika. Pole opisujące czas pomiaru nie może pochodzić od mierzonego |
 | Kanał wejściowy **nie nadpisuje** istniejącego pliku członka | `out.exists()` w `render_member.py` i `external-intake.yml` | powtórne zgłoszenie zapisałoby `stage: dry-run` na członku `enforced` — projekt traci ochronę PR-em wyglądającym na onboarding. Reguła OPA tego nie łapie: porównuje dwa PLIKI, a tu plik jest ten sam |
-| Apply jest single-flight | `concurrency` w `apply.yml`, bez `cancel-in-progress` | dwa równoległe apply nadpisują się na polityce org-level (DEC-6) |
+| Environment `perimeter-apply` i `break-glass` mają **politykę gałęzi** zawężoną do gałęzi domyślnej | `tools/bootstrap_github.sh` (ustawia i **odczytuje z powrotem**) + asercja selftestu na tym skrypcie | `principalSet` konta apply pinuje samą nazwę environment, **nie ref** — więc bez tej polityki job z `environment: perimeter-apply` na DOWOLNEJ gałęzi wymienia token na tożsamość zapisującą perimetr. To ta polityka, a nie recenzent, jest zdaniem „perimetr zmienia się wyłącznie z gałęzi domyślnej". Działa na każdym planie GitHuba, więc jej brak jest dziurą, nie odstępstwem |
+| Kontrola **odczytana z API**, nie wywnioskowana z wysłanego ustawienia | odczyt zwrotny w `tools/bootstrap_github.sh` + asercja selftestu | wymagani recenzenci na environment i ochrona gałęzi prywatnego repo to **funkcje płatne**: na planie, który ich nie ma, API odrzuca żądanie i zostaje environment bez ani jednej reguły ochrony, opisany w komentarzach i dokumentacji jako bramka. Skrypt, który wysyła PUT i milczy o wyniku, produkuje dokładnie ten stan — kontrolę istniejącą wyłącznie w tekście |
+| Apply jest single-flight | `concurrency` w `apply.yml`, bez `cancel-in-progress` | przegrany apply pada na `Error 400: eTag … does not match` — **nic nie ginie po cichu**, ale ~80-100% nałożonych w czasie przebiegów wymaga ponowienia z ręki. Argumentem jest NIEZAWODNOŚĆ, nie cicha utrata reguł (DEC-6, skorygowane pomiarem 2026-08-07) |
+| Projekt z `policy.yaml` §`control_plane_projects` **nie wchodzi** do perimetru | reguła OPA w `onboarding.rego` (furtka: `control_plane_exception` w pliku członka) | **jedyne złamanie, którego `git revert` NIE COFA.** Bucket stanu leży w projekcie administracyjnym perimetru; w konfiguracji egzekwowanej konto apply traci dostęp do własnego stanu, bo woła z GitHub Actions — spoza granicy. Apply rewertu też potrzebuje stanu, więc pętli nie da się przerwać pipeline'em: wychodzi z niej człowiek z uprawnieniami org-level, ręcznie na żywej polityce |
+| Sekcja `control_plane_projects` **istnieje** (może być pusta) | `required` w `schemas/policy.schema.json` + asercja w selfteście | brak sekcji i pusta lista dają ten sam skutek — bez `required` bramkę rozbraja się „sprzątaniem" nieużywanego pola, a różnica między „zdecydowaliśmy, że nie ma takich projektów" a „nikt o tym nie pomyślał" znika z diffu |
 | Zakaz `ANY_IDENTITY` / `method: "*"` / `resources: ["*"]` | `perimeter.rego` na plan-JSON | reguła przestaje cokolwiek ograniczać, a wygląda tak samo (DEC-3) |
+| Każda tożsamość ma poprawny **kształt** (prefiks typu + domena) | `perimeter.rego` na plan-JSON; **istnienie** konta osobno, w `preflight_check.sh --identity` | ACM waliduje tożsamości po swojej stronie i odrzuca **całą** zmianę (`invalid or non-existent`), więc literówka w adresie wywraca apply po review, na obiekcie org-plane — i wygląda jak problem z uprawnieniami. Wzorzec domeny jest świadomie luźny: bramka odrzucająca konto domyślne (`developer.`, `appspot.`) blokowałaby poprawny onboarding |
 | Kontrakt buduje się polami, nigdy `jsonencode(<zbiorcze>)` | `contract.tf` + test w selfteście | kontrakt zamienia się w drugą kopię stanu (DEC-8) |
 | Kontrakt i stan w **różnych** bucketach | `precondition` w `contract.tf` | jeden błąd w IAM odsłania pełną mapę granicy (DEC-8) |
+| Obie publikacje kontraktu (bucket + asset release'u) wychodzą z **jednego kroku apply** | `test_kontrakt_dwie_publikacje` w selfteście (parsuje kroki `apply.yml`) | dwa kroki = dwa wyzwalacze i dwa odczyty stanu, więc dwie kopie cicho się rozjadą, a konsument nie ma jak zauważyć, że czyta starszą (DEC-8) |
 | Zakaz komendy commitującej całą konfigurację dry-run | guard w `validate.yml` | promocja WSZYSTKICH członków jednym wywołaniem, bez czego cofnąć (`docs/3` §A) |
 | Akcje przypięte 40-znakowym SHA | guard w `validate.yml` + Dependabot | kto kontroluje tag, kontroluje pipeline mający prawo zmieniać granicę organizacji |
 
@@ -76,6 +84,13 @@ guard `test_samodzielnosc` w selfteście pilnuje tego przy każdym przebiegu.
   nadający uprawnienia nie może być stosowany przez tożsamość, która z nich korzysta.
 - **Testy są w połowie negatywne.** Bramka, która nigdy nie odrzuca, przechodzi każdy test pozytywny
   i nie chroni niczego. Dodając bramkę, dodaj też przypadek, w którym ma PAŚĆ.
+- **Bramka ludzka na apply jest opisana jako warstwa OSOBNA i warunkowa, a nie jako fundament.** Kusi, żeby
+  napisać „apply czeka na człowieka" i uznać sprawę za zamkniętą — ale wymagani recenzenci to płatna funkcja
+  GitHuba, a materiał ma działać także tam, gdzie jej nie ma. Dlatego komentarze mówią, co ta warstwa daje
+  i czego brak, gdy jej nie ma, zamiast twierdzić, że jest. Odstępstwo (brak recenzenta) zapisuje się
+  z powodem, listą kontroli maszynowych, które zostają, i jawnym zdaniem, czego one **nie** dają — pary oczu
+  na TREŚCI zmiany. Zamiana apply na ręczny `workflow_dispatch` nie jest tu zamiennikiem: to pauza, nie
+  kontrola, a zatwierdzenie przez tę samą osobę minutę po merge'u nie dokłada niczyjego osądu.
 
 ## Jak zweryfikować, że odtworzenie się udało
 
@@ -84,7 +99,11 @@ python3 selftest/selftest.py          # rozpakowuje starter do katalogu tymczaso
 ```
 
 Wymaga na PATH: `terraform` (1.15.5), `conftest`, `tflint`, `python3` z `pyyaml`; opcjonalnie `actionlint`
-i `check-jsonschema` (ich brak daje SKIP z nazwą, nigdy ciche zielone). Oczekiwany wynik: **114/114**.
+i `check-jsonschema` (ich brak daje SKIP z nazwą, nigdy ciche zielone). Oczekiwany wynik: **184/184**.
+
+Bez `tflint` na PATH przebieg kończy się na **181/181** i wypisuje SKIP z nazwą — trzy asercje
+(`--init` plus lint obu stacków) po prostu się nie wykonują. Liczba niższa niż 184 nie jest błędem
+startera, tylko informacją, czego w tym środowisku nie sprawdzono.
 
 Sam skan samodzielności (bez terraforma i conftesta, sam Python) da się uruchomić na dowolnej ścieżce —
 przydaje się tam, gdzie materiał jest publikowany razem z innymi katalogami:
@@ -94,7 +113,9 @@ python3 selftest/skan_samodzielnosci.py . ../inny-katalog
 ```
 
 Selftest **nie** sprawdza mechaniki GitHuba (environments, OIDC, required reviewers) ani realnego API Google.
-Pierwszą warstwę pokrywa `actionlint`, drugą dopiero pierwszy `plan` na docelowej organizacji.
+Pierwszą warstwę pokrywa `actionlint`, drugą dopiero pierwszy `plan` na docelowej organizacji. Sprawdza za to
+zastępczo, że `tools/bootstrap_github.sh` **czyta te ustawienia z powrotem z API** — bo skoro bramki nie da
+się zobaczyć stąd, to przynajmniej narzędzie, które ją zakłada, ma odróżniać „wysłaliśmy PUT" od „jest".
 
 ## Czego tu nie ma
 
