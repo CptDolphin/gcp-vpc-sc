@@ -33,7 +33,7 @@ próba zawężenia zakresu — a tu zawęża się uprawnienia, nie zasięg.
 | Tożsamość | Kiedy działa | Czego dotyka |
 |---|---|---|
 | `sa-vpcsc-plan` | każdy PR (read-only) | czyta perimetr i inwentarz, nic nie zmienia |
-| `sa-vpcsc-apply` | tylko `main` + environment z reviewerami | modyfikuje zawartość perimetru |
+| `sa-vpcsc-apply` | tylko environment `perimeter-apply`, a ten — tylko z gałęzi domyślnej (§5.1) | modyfikuje zawartość perimetru |
 | człowiek (break-glass) | incydent, przez PAM/JIT | wyjęcie członka z konfiguracji egzekwowanej |
 
 **DLACZEGO rozdzielone:** plan jest uruchamiany przez każdy PR, także z forka czy z gałęzi, której nikt nie
@@ -190,7 +190,23 @@ nie działają na folderze); zawężamy więc to, co jesteśmy w stanie zawęzi�
 | Rola | Zakres | Do jakiej operacji | Bez niej |
 |---|---|---|---|
 | `roles/storage.objectAdmin` | prefiks bucketa stanu | zapis stanu Terraform + lock | apply nie zapisze stanu → następny plan zobaczy świat niezgodny z rzeczywistością |
+| custom rola `vpcScMonitoringWriter` | projekt z `monitoring.project_id` | pełny cykl życia metryk logowych i polityk alertów perimetru (`terraform/monitoring.tf`) | **apply pada zawsze**, także przy zmianie niedotyczącej monitoringu: `terraform apply` zaczyna od refreshu, więc musi PRZECZYTAĆ te zasoby (`Error 403: Permission 'logging.logMetrics.get' denied`) |
 | `roles/iam.workloadIdentityUser` **na `sa-vpcsc-apply`** | to konto serwisowe | impersonacja z puli WIF, wyłącznie dla workflow apply | brak ścieżki keyless dla apply |
+
+**Pułapka, która kosztowała dwa czerwone applye:** „konto apply zapisuje, konto plan czyta" to skrót
+myślowy. `terraform apply` **zaczyna od odświeżenia stanu**, więc apply jest nadzbiorem planu i musi umieć
+odczytać *wszystko*, czym zarządza — łącznie z zasobami, których w danym przebiegu nie rusza. Konto plan
+czytało metryki i alerty „przypadkiem", bo ma read-only role na organizacji; konto apply nie miało do nich
+żadnego prawa. Każdy nowy typ zasobu w `terraform/` domagaj się sprawdzenia po TEJ stronie tabeli, nie
+tylko po stronie planu.
+
+`vpcScMonitoringWriter` zamiast pary `roles/monitoring.editor` + `roles/logging.configWriter`: ta para
+daje na całym projekcie także tworzenie **sinków** i kubełków logów, czyli ścieżkę wyprowadzenia logów,
+o którą nikt nie prosił. Bierzemy dwa typy zasobów i nic poza nimi — ta sama zasada, co przy
+`vpcScPerimeterWriter`. `delete` jest tu natomiast **obecne**, w przeciwieństwie do perimetru: metryka
+i alert są odtwarzalne z kodu jednym apply, a część zmian `metric_descriptor` provider realizuje jako
+replace; perimetru odtworzyć się nie da, bo `servicePerimeters.create` świadomie nie należy do żadnej roli
+tego pipeline'u.
 | (opcjonalnie) `roles/logging.viewer` | organizacja | raport naruszeń dry-run czyta audit-logi (`protoPayload.metadata.dryRun=true`) | nie da się udowodnić, że okno obserwacji było czyste — a bez tego promocja do enforced jest zgadywaniem. Można też nadać osobnej tożsamości raportującej |
 
 ### 3.3 IAM Deny — pas bezpieczeństwa ponad rolą
@@ -319,12 +335,14 @@ mapowanie atrybutów:
   attribute.environment = assertion.environment
 ```
 
-Dwa osobne warunki wejścia — to jest **najważniejszy guardrail całej konstrukcji**:
+**Jeden warunek na providerze, granica plan/apply na wiązaniach `principalSet`** — i to rozróżnienie jest
+ważniejsze, niż wygląda. Tabela opisująca „dwa warunki wejścia" wymieniała ograniczenia, których w kodzie
+nie ma (`event_name`, `ref`), więc czytelnik brał za bramkę coś, czego nikt nie egzekwuje. Stan faktyczny:
 
-| Ścieżka | `attribute_condition` | Impersonuje |
+| Ścieżka | Co realnie odcina dostęp do konta | Impersonuje |
 |---|---|---|
-| plan (PR) | `assertion.repository == 'ORG/gcp-vpc-sc' && assertion.event_name == 'pull_request'` | `sa-vpcsc-plan` |
-| apply | `assertion.repository == 'ORG/gcp-vpc-sc' && assertion.ref == 'refs/heads/main' && assertion.environment == 'perimeter-apply'` | `sa-vpcsc-apply` |
+| plan (PR) | `attribute_condition` providera: `assertion.repository == 'ORG/gcp-vpc-sc'`, plus `principalSet` po `attribute.repository`. To jest **każdy** workflow z tego repozytorium, także z pull requesta — i dlatego to konto jest read-only. | `sa-vpcsc-plan` |
+| apply | ten sam `attribute_condition`, plus `principalSet` po `attribute.environment/perimeter-apply`. **Gałęzi w tym warunku NIE MA** — ref odcina dopiero polityka gałęzi environment (§5.1). | `sa-vpcsc-apply` |
 
 **Bez `attribute_condition` (albo z warunkiem `true`):** dowolny workflow w **dowolnym repozytorium waszej
 organizacji GitHub** może wymienić swój token OIDC na dostęp do perimetru całej organizacji GCP. To nie jest
@@ -337,12 +355,28 @@ Wiązanie po stronie SA (kto może impersonować):
 sa-vpcsc-plan   ← roles/iam.workloadIdentityUser dla
   principalSet://iam.googleapis.com/projects/102839858845/locations/global/workloadIdentityPools/github-actions/attribute.repository/ORG/gcp-vpc-sc
 sa-vpcsc-apply  ← roles/iam.workloadIdentityUser dla tej samej puli,
-                  ale ścieżkę zawęża attribute_condition providera (ref + environment)
+                  ale ścieżkę zawęża principalSet po attribute.environment (perimeter-apply)
 ```
 
-Po stronie GitHuba: environment `perimeter-apply` z **required reviewers** (zespół sieciowy + security).
-To bramka niezależna od CODEOWNERS — nawet zmergowany PR nie zaaplikuje się, dopóki człowiek nie zatwierdzi
-uruchomienia w tym environment.
+**Uwaga na to, czego w tym warunku NIE MA — gałęzi.** `attribute_condition` providera pinuje repozytorium,
+a `principalSet` konta apply pinuje nazwę environment. Ani jedno, ani drugie nie mówi „`refs/heads/main`",
+więc job z `environment: perimeter-apply` uruchomiony na **dowolnej** gałęzi wymienia token na to samo
+konto. Ref odcina dopiero **polityka gałęzi environment** (`deployment_branch_policy`) po stronie GitHuba —
+i to ona, a nie warunek WIF, jest zdaniem „perimetr zmienia się wyłącznie z gałęzi domyślnej". Ustawia ją
+`tools/bootstrap_github.sh`; działa na każdym planie GitHuba.
+
+Druga warstwa po stronie GitHuba: environment `perimeter-apply` z **required reviewers** (zespół sieciowy +
+security). To bramka niezależna od CODEOWNERS — nawet zmergowany PR nie zaaplikuje się, dopóki człowiek nie
+zatwierdzi uruchomienia. **Jest to funkcja płatna**: na planach, które jej nie mają, API odrzuca ustawienie
+(`Please ensure the billing plan supports the required reviewers protection rule`), a environment zostaje
+bez ani jednej reguły ochrony — wyglądając w kodzie na bramkę. Odczytaj stan, zanim uznasz, że istnieje:
+
+```bash
+gh api repos/<ORG>/<REPO>/environments/perimeter-apply --jq '.protection_rules'
+```
+
+Pusta tablica = bramki ludzkiej nie ma. Wtedy zapisz to jako świadome odstępstwo z powodem i z listą
+kontroli, które ją zastępują (`docs/1`, etap 4) — nie zostawiaj rozjazdu między dokumentacją a stanem.
 
 ### 5.2 „Skoro mamy WIF, po co jeszcze konta serwisowe?"
 
@@ -390,14 +424,19 @@ Prosimy o (środowisko: <org GCP>, repozytorium: ORG/gcp-vpc-sc):
    - custom rola vpcScPerimeterWriter               [ORGANIZACJA]  — servicePerimeters.update + accessLevels.create/update
                                                                      (BEZ create/delete perimetru — patrz uzasadnienie)
    - roles/storage.objectAdmin                      [prefiks bucketa stanu] — zapis stanu TF
+   - custom rola vpcScMonitoringWriter              [PROJEKT monitoringu] — logMetrics.* + alertPolicies.*
+                                                                     (tylko te dwa typy; BEZ sinków i kubełków logów.
+                                                                      apply odświeża stan, więc bez tego pada na 403
+                                                                      przy każdej zmianie, także niedotyczącej monitoringu)
    - (opcjonalnie) roles/logging.viewer             [ORGANIZACJA]  — raport naruszeń dry-run
 
 3. IAM Deny [ORGANIZACJA] dla obu SA:
    accesscontextmanager.servicePerimeters.delete, accesscontextmanager.policies.delete
 
 4. Workload Identity Pool `github-actions` + provider OIDC GitHub z attribute_condition
-   ograniczającym do repozytorium ORG/gcp-vpc-sc (plan: event_name==pull_request;
-   apply: ref==refs/heads/main && environment==perimeter-apply)
+   ograniczającym do repozytorium ORG/gcp-vpc-sc; rozdział plan/apply na wiązaniach principalSet
+   (plan: attribute.repository; apply: attribute.environment==perimeter-apply — BEZ warunku o gałęzi,
+   ten daje polityka gałęzi environment po stronie GitHuba)
 
 5. Bucket stanu Terraform: versioning + soft-delete, BEZ retention-lock
    (WORM na aktywnie nadpisywanym stanie łamie backend).

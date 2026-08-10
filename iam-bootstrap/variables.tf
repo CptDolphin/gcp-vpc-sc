@@ -36,8 +36,9 @@ variable "apply_environment" {
   default     = "perimeter-apply"
 
   validation {
-    # Pusta nazwa environment w `attribute_condition` puli WIF dałaby warunek, który spełnia KAŻDY token z
-    # tego repozytorium — w tym token z pull requesta. Cała bramka ludzkiego zatwierdzenia przestałaby istnieć.
+    # Pusta nazwa w `principalSet` konta apply dałaby zbiór dopasowujący KAŻDY token z tego repozytorium —
+    # w tym token z pull requesta. Rozdział plan/apply przestałby istnieć, a jedyną pozostałą barierą byłaby
+    # polityka gałęzi environment, o której ten stack nic nie wie.
     condition     = length(trimspace(var.apply_environment)) > 0
     error_message = "apply_environment nie może być puste — to ono odcina tokeny z pull requestów od konta apply."
   }
@@ -60,9 +61,24 @@ variable "state_prefix" {
   type        = string
   default     = "vpc-sc/perimeter"
 
+  # DWA TRYBY AWARII PREFIKSU — komentarz WSPÓLNY dla `state_prefix` i `contract_prefix`. Oba robią dokładnie
+  # jedno: wklejają się do tego samego wyrażenia IAM `resource.name.startsWith(".../objects/<prefiks>")`.
+  # Psują się w PRZECIWNE strony, więc jeden warunek musi łapać oba naraz:
+  #
+  #   1. Wiodący `/` → `objects//vpc-sc/...`, co nie pasuje do żadnego obiektu. Warunek przestaje cokolwiek
+  #      DOPUSZCZAĆ: apply jest zielony, a konsument dostaje 403 i nie wie dlaczego. Awaria GŁOŚNA — boli
+  #      od razu, ktoś ją w końcu zgłosi.
+  #   2. Pusty (lub sam whitespace) → wyrażenie degeneruje się do `.../objects/`, czyli pasuje do KAŻDEGO
+  #      obiektu w buckecie. Grant nie znika — po CICHU ROZSZERZA się na cały bucket. Nic nie pada, nikt nie
+  #      zgłasza, a zawężenie do prefiksu (jedyny powód, dla którego ten warunek w ogóle istnieje) przestaje
+  #      działać. To ten tryb jest groźniejszy, dokładnie dlatego, że nie boli.
+  #
+  # DLACZEGO KOPIA WARUNKU, A NIE JEDNA FUNKCJA: Terraform nie ma funkcji użytkownika — blok `function` to
+  # OpenTofu (sprawdzone na 1.15.5: „Blocks of type function are not expected here"), a `validation` nie
+  # sięga po `locals`. Wspólny jest więc ten komentarz, a zgodności obu bliźniaków pilnuje selftest
+  # (`test_iam_bootstrap`) — planem i odczytem gotowego warunku, nie porównaniem tekstu. Brak takiego
+  # spinacza jest tym, co pozwoliło `contract_prefix` przez cały czas nie mieć ŻADNEJ walidacji (#1912).
   validation {
-    # Wiodący `/` daje prefiks `//vpc-sc/...`, który nie pasuje do żadnego obiektu — warunek IAM przestaje
-    # cokolwiek dopuszczać, a backend dostaje 403 przy pierwszym zapisie stanu.
     condition     = !startswith(var.state_prefix, "/") && length(trimspace(var.state_prefix)) > 0
     error_message = "state_prefix nie może być pusty ani zaczynać się od /."
   }
@@ -91,9 +107,23 @@ variable "wif_provider_id" {
 }
 
 variable "grant_logging_viewer" {
-  description = "Czy nadać kontu plan roles/logging.viewer na organizacji. Bez tego workflow violations-report nie odczyta naruszeń dry-run, a wtedy promocja do enforced opiera się na deklaracji zamiast na dowodzie."
+  description = "Czy nadać kontu plan roles/logging.viewer na organizacji. Bez tego workflow violations-report nie odczyta naruszeń dry-run, a wtedy promocja do enforced opiera się na deklaracji zamiast na dowodzie. DRUGI, MNIEJ OCZYWISTY SKUTEK ustawienia na false: przy włączonej sekcji `monitoring` w policy.yaml ta sama rola daje kontu plan `logging.logMetrics.get`, bez którego KAŻDY `terraform plan` pada na odświeżeniu metryk — czyli wyłączenie raportu wyłącza też planowanie."
   type        = bool
   default     = true
+}
+
+variable "monitoring_project_id" {
+  description = "Projekt, w którym repozytorium perimetru tworzy metryki i alerty — musi zgadzać się z `monitoring.project_id` w perimeter/policy.yaml. Puste = sekcja `monitoring` wyłączona, żaden grant nie powstaje (bezpieczna degradacja)."
+  type        = string
+  default     = ""
+
+  validation {
+    # Puste = monitoring wyłączony (świadomie dopuszczone, tak samo jak przy `contracts_bucket`).
+    # Niepuste musi być ID projektu — numer wklejony tu zamiast ID tworzy granty w projekcie, którego nie ma,
+    # a API mówi tylko „not found", bez podpowiedzi, że pomyliły się dwa różne pola.
+    condition     = var.monitoring_project_id == "" || can(regex("^[a-z][a-z0-9-]{4,28}[a-z0-9]$", var.monitoring_project_id))
+    error_message = "monitoring_project_id to ID projektu (6-30 znaków, małe litery/cyfry/myślniki) albo pusty string, gdy sekcja monitoring w policy.yaml jest wyłączona."
+  }
 }
 
 variable "contracts_bucket" {
@@ -112,6 +142,17 @@ variable "contract_prefix" {
   description = "Prefiks obiektów kontraktu. Warunek IAM zawęża oba ACL do tego prefiksu, nie do całego bucketa."
   type        = string
   default     = "vpc-sc/"
+
+  validation {
+    # Warunek identyczny jak przy `state_prefix` — oba tryby awarii opisane TAM, przy pierwszym z bliźniaków.
+    # RÓŻNICA JEST W CENIE trybu cichego (pusty prefiks). Bucket stanu należy do tego jednego stacku, a
+    # `contracts_bucket` z założenia dzielimy z konsumentami spoza niego. Pusty prefiks daje tu grupom
+    # z `contract_reader_groups` odczyt WSZYSTKIEGO w tym buckecie, a `sa-vpcsc-apply` (objectAdmin) — zapis
+    # wszędzie w nim, także na obiektach, których ten stack nie publikuje i o których nic nie wie. Kontrakt
+    # miał być jedyną rzeczą wystawioną na zewnątrz; bez tego warunku staje się nią cały bucket.
+    condition     = !startswith(var.contract_prefix, "/") && length(trimspace(var.contract_prefix)) > 0
+    error_message = "contract_prefix nie może być pusty ani zaczynać się od /."
+  }
 }
 
 variable "contract_reader_groups" {

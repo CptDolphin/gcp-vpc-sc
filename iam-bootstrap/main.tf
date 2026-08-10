@@ -215,6 +215,64 @@ resource "google_storage_bucket_iam_member" "contract_reader" {
   }
 }
 
+# --- 3c. monitoring perimetru ----------------------------------------------------------------------
+# `terraform/monitoring.tf` w repo perimetru tworzy trzy `google_logging_metric` i dwie
+# `google_monitoring_alert_policy` w projekcie `monitoring.project_id`. Zarządza nimi konto APPLY — i do
+# tego dnia nie miało do nich ŻADNEGO prawa, nawet odczytu.
+#
+# DLACZEGO TO WYWRACAŁO APPLY, A NIE PLAN. `terraform apply` zaczyna od ODŚWIEŻENIA stanu, czyli musi
+# PRZECZYTAĆ wszystko, czym zarządza — także zasoby, których w danym przebiegu nie zmienia. Konto plan
+# czytało je „przypadkiem", bo ma org-level `monitoring.viewer` i `logging.viewer`; konto apply miało
+# wyłącznie custom rolę na perimetrze i storage. Efekt: `plan` zielony, `apply` czerwony na
+# `Error 403: Permission 'logging.logMetrics.get' denied` — zawsze, przy każdej zmianie, także takiej,
+# która monitoringu w ogóle nie dotyka. To ten sam tryb awarii co przy `contract_reader_plan` wyżej
+# (refresh czyta obiekt kontraktu), tylko po drugiej stronie granicy plan/apply.
+#
+# DLACZEGO CUSTOM ROLA, A NIE `roles/monitoring.editor` + `roles/logging.configWriter`: ta para daje
+# na całym projekcie m.in. tworzenie SINKÓW logów, kubełków i uprawnień do nich — czyli ścieżkę
+# wyprowadzenia logów gdzie indziej, o którą nikt nie prosił. Bierzemy dokładnie dwa typy zasobów, które
+# ten stack oddaje pipeline'owi, i nic poza nimi. Ta sama zasada, co przy `vpcScPerimeterWriter`.
+#
+# DLACZEGO Z `delete`, skoro przy perimetrze świadomie go NIE MA: to nie jest ta sama decyzja. Metryka
+# i alert są ODTWARZALNE z kodu tego repozytorium jednym apply, a część zmian pola `metric_descriptor`
+# provider realizuje jako replace (destroy+create) — bez `delete` legalna zmiana konfiguracji alertu
+# zatrzymywałaby się w połowie. Perimetru odtworzyć się nie da, bo `servicePerimeters.create` świadomie
+# nie należy do żadnej roli tego pipeline'u; skasowanie granicy jest ścieżką człowieka i tak zostaje.
+resource "google_project_iam_custom_role" "monitoring_writer" {
+  count = var.monitoring_project_id == "" ? 0 : 1
+
+  project     = var.monitoring_project_id
+  role_id     = "vpcScMonitoringWriter"
+  title       = "VPC-SC perimeter monitoring writer (CI)"
+  description = "Pełny cykl życia metryk logowych i polityk alertów perimetru w JEDNYM projekcie. Bez sinków, kubełków i IAM."
+  stage       = "GA"
+
+  permissions = [
+    # `get`/`list` są tu równie obowiązkowe jak zapis — bez nich pada REFRESH, czyli apply nie dochodzi
+    # nawet do miejsca, w którym cokolwiek zmienia.
+    "logging.logMetrics.get",
+    "logging.logMetrics.list",
+    "logging.logMetrics.create",
+    "logging.logMetrics.update",
+    "logging.logMetrics.delete",
+    "monitoring.alertPolicies.get",
+    "monitoring.alertPolicies.list",
+    "monitoring.alertPolicies.create",
+    "monitoring.alertPolicies.update",
+    "monitoring.alertPolicies.delete",
+  ]
+}
+
+# Rola idzie WYŁĄCZNIE do konta apply. Konto plan czyta te zasoby rolami read-only na organizacji
+# i musi zostać bez ani jednego uprawnienia zapisującego — to niezmiennik całego stacku, nie szczegół.
+resource "google_project_iam_member" "apply_monitoring" {
+  count = var.monitoring_project_id == "" ? 0 : 1
+
+  project = var.monitoring_project_id
+  role    = google_project_iam_custom_role.monitoring_writer[0].id
+  member  = "serviceAccount:${google_service_account.apply.email}"
+}
+
 # --- 4. Workload Identity Federation ---------------------------------------------------------------
 # WIF to BRAMA, nie tożsamość: sam z siebie nie nadaje żadnych uprawnień. Decyduje, KTO może impersonować
 # konta serwisowe powyżej — a to one mają role.
@@ -259,9 +317,18 @@ resource "google_service_account_iam_member" "plan_wif" {
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_repository}"
 }
 
-# apply: WYŁĄCZNIE token niosący environment `perimeter-apply`. Token z pull requesta go nie ma, więc tą
-# tożsamością nie da się posłużyć z PR-a — nawet gdyby ktoś dopisał ją do workflow.
-# (Environment ma required reviewers, więc jest to jednocześnie bramka ludzka.)
+# apply: WYŁĄCZNIE token niosący environment `perimeter-apply`.
+#
+# CZEGO TU NIE MA, a bywa tu doczytywane: gałęzi. Warunek jest o JEDNYM atrybucie — nazwie environment —
+# więc sam z siebie nie odróżnia gałęzi domyślnej od dowolnej innej. Token z pull requesta nie niesie tej
+# nazwy tylko dopóty, dopóki żaden job na tamtym refie jej nie zadeklaruje; job z `environment:
+# perimeter-apply` na gałęzi roboczej dostanie dokładnie ten sam token. Ref odcina dopiero POLITYKA GAŁĘZI
+# environment (`deployment_branch_policy`) — ustawia ją `tools/bootstrap_github.sh` i to ona, a nie ten
+# `principalSet`, jest zdaniem „perimetr zmienia się wyłącznie z gałęzi domyślnej".
+#
+# Wymagani recenzenci na tym environment to WARSTWA OSOBNA i płatna: gdy plan GitHuba jej nie ma, ta
+# konstrukcja stoi dalej, ale bez pary oczu między merge'em a mutacją granicy. Nie zakładaj jej istnienia —
+# skrypt bootstrapu czyta ją z API i odmawia zgłoszenia sukcesu, gdy jej nie ma.
 resource "google_service_account_iam_member" "apply_wif" {
   service_account_id = google_service_account.apply.name
   role               = "roles/iam.workloadIdentityUser"
