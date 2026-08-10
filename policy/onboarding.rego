@@ -178,10 +178,17 @@ deny contains msg if {
 
 # Baseline mnoży się przez liczbę członków, więc `*` w metodach kosztuje tu najwięcej — i daje skanerowi
 # prawo do wszystkiego w każdym chronionym projekcie.
+# WYJĄTEK ten sam co w perimeter.rego i z tego samego, ZMIERZONEGO powodu (#1904): dla usług, którym ACM nie
+# publikuje listy metod (`supportedMethods` puste), `*` jest JEDYNĄ wartością, jaką API przyjmuje — wypisanie
+# metod jawnie kończy się `Error 400: METHOD ... is not supported`, czyli regułą, która nie powstaje. Wybór
+# jest więc między `*` a brakiem ochrony tej usługi, nie między `*` a czymś węższym. Listę czytamy wprost
+# z `input.policy` (collect_declarations.py podaje cały baseline, więc `--data` nie jest tu potrzebne).
+# `object.get` z domyślną pustą listą: brak pola = zero wyjątków = każdy `*` odrzucony (fail-closed).
 deny contains msg if {
 	some rule in object.get(input.policy, "baseline_ingress", [])
 	some op in rule.operations
 	"*" in op.methods
+	not op.service in object.get(input.policy, "services_without_method_selectors", [])
 	msg := sprintf("policy.yaml baseline_ingress[%q]: method \"*\" na %s — wypisz metody jawnie", [rule.title, op.service])
 }
 
