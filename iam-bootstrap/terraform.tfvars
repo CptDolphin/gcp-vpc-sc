@@ -17,21 +17,28 @@ monitoring_project_id = "rwlab-vpcsc-adm-46bc"
 # a `403` w tym API nie odróżnia „nie ma" od „nie widzę" — org-admin nie ma `iam.denypolicies.*` z urzędu.
 deny_reader_principals = ["user:mail@rafalwalas.com"]
 
-# WYŁĄCZONE ŚWIADOMIE, nie z zapomnienia — i to jest zapis stanu faktycznego, nie preferencji.
+# WŁĄCZONE 2026-08-11 (#1966). Warstwa istnieje, jest ZMIERZONA i nie opiera się już na deklaracji.
 #
-# Zmierzone 2026-08-10 rolą `vpcScDenyReader` (wcześniej to pytanie w ogóle nie miało odpowiedzi):
-#   gcloud iam policies list --attachment-point=…/organizations/179248107504 --kind=denypolicies  ->  {}
-#   GET …/denypolicies/vpcsc-ci-no-destroy                                     ->  HTTP 404 POLICY_NOT_FOUND
-# Polityki NIE MA. Nigdy nie powstała — dotąd wyglądało to na `403`, czyli na brak dostępu do czegoś,
-# co jest. Warstwa opisywana w README i na diagramie jako obecna nie chroniła niczego.
+# Stan przed: `gcloud iam policies list --kind=denypolicies` na organizacji zwracał `{}` — zero polityk
+# deny w całym orgu. Warstwa opisana w README i na diagramie jako „twardy zakaz ponad rolami" nie chroniła
+# niczego, a `403` z `denypolicies.get` maskował to jako „chyba jest, tylko nie widzę" (#1960, GCP-0062).
 #
-# Utworzenie jej wymaga `iam.denypolicies.create`, które niesie WYŁĄCZNIE `roles/iam.denyAdmin` (jedyna
-# z 2382 ról predefiniowanych), a roli własnej z tym uprawnieniem zbudować się nie da
-# (`customRolesSupportLevel = NOT_SUPPORTED`). Ta sama rola daje `denypolicies.delete` na KAŻDEJ polityce
-# deny w organizacji, więc grant jest decyzją o modelu uprawnień człowieka na org, a nie krokiem apply —
-# rozpisaną w ADR razem z odrzuconymi wariantami. Do czasu jej podjęcia stack ma nie udawać, że warstwa
-# stoi: `false` daje `plan` bez różnic i jawny brak, zamiast wiecznego `1 to add`, którego nikt nie stosuje.
+# JAK POWSTAŁA I DLACZEGO NIKT NIE MA DZIŚ `roles/iam.denyAdmin`. Zapisu tej warstwy nie da się zawęzić:
+# `denypolicies.create/update/delete` mają `customRolesSupportLevel = NOT_SUPPORTED`, a jedyną rolą, która
+# je niesie, jest `roles/iam.denyAdmin` — razem z prawem skasowania KAŻDEJ polityki deny w organizacji.
+# Rola została nadana na czas apply i testu, po czym ODEBRANA (wariant C z GCP-0062): warstwa stoi,
+# `vpcScDenyReader` nadal ją CZYTA (więc `plan` schodzi do `No changes` na samym odczycie), a jej zmiana
+# wymaga świadomego ponownego nadania. To break-glass dla samego guardrailu, nie stały grant.
 #
-# Zdjęcie tej linijki = włączenie warstwy. Przed tym: nadaj `roles/iam.denyAdmin` tożsamości applikującej,
-# a po apply potwierdź `tools/deny_check.sh --org 179248107504` (kod 0), nie samym „apply zielony".
-manage_deny_policy = false
+# CO ZOSTAŁO ZMIERZONE (Policy Troubleshooter v3, `sa-vpcsc-apply` z tymczasowym `policyEditor`,
+# perimetr jednorazowy — nigdy `ai_core`):
+#   servicePerimeters.delete -> allow ALLOW_ACCESS_STATE_GRANTED + deny DENY_ACCESS_STATE_DENIED
+#                               => overallAccessState CANNOT_ACCESS        (Deny BIJE allow)
+#   servicePerimeters.update -> deny DENY_ACCESS_STATE_NOT_DENIED => CAN_ACCESS   (kontrola pozytywna)
+# Uwaga operacyjna, która wywraca naiwny test: odmowa z Deny wygląda w API DOKŁADNIE tak samo jak brak
+# roli (`PERMISSION_DENIED: The caller does not have permission.`) — bez nazwy polityki i bez słowa „deny".
+# Dowodem jest Policy Troubleshooter, nie treść komunikatu.
+#
+# Wpisanie tu `false` = skasowanie polityki przy najbliższym apply. Przed tym przeczytaj GCP-0062;
+# po każdej zmianie potwierdzaj `tools/deny_check.sh --org 179248107504` (kod 0), nie samym „apply zielony".
+manage_deny_policy = true
