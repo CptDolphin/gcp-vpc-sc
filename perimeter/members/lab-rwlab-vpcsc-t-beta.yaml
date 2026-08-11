@@ -1,0 +1,30 @@
+schema_version: 1
+division: lab
+project_id: rwlab-vpcsc-t-beta
+project_number: '254311132993'
+owner_group: lab@rafalwalas.com
+change_ref: 'manual:trzeci czlonek perimetru — nosnik jedynych regul EGRESS. Egress ma zostac w dry-run,
+  a etap reguly egress jest w tym rendererze etapem CZLONKA (egress_rules_enforced filtruje po m.stage),
+  wiec nie moze wisiec na t-alpha, ktory jest celem promocji do enforced'
+approved_by: mail@rafalwalas.com
+stage: dry-run
+dry_run_since: '2026-08-11'
+review_by: '2027-02-07'
+profiles:
+- name: bq-omni-external-read
+  params:
+    query_identities:
+    - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
+    external_resources:
+    - s3://rwlab-vpcsc-omni-demo
+- name: vertex-batch-training
+  params:
+    pipeline_identities:
+    - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
+    access_levels:
+    - corp_network
+    training_identities:
+    - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
+    data_source_projects:
+    - '222575464524'
+exceptions: []
