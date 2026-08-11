@@ -194,6 +194,23 @@ jobs:
           python3 tools/collect_declarations.py > declarations.json
           conftest test --policy policy --namespace vpcsc.onboarding declarations.json
 
+      # CO NAPRAWDE POWSTALO, w przebiegu, a nie tylko w pull requescie. Normalnie plik czlonka widac
+      # w diffie PR-a — ale gdy utworzenie PR-a zostanie odmowione (krok nizej), jedynym sladem po tym,
+      # co kanal wyrenderowal, byla nazwa pliku w logu. Wnioskodawca nie ma dostepu do repozytorium
+      # perimetru, wiec podsumowanie przebiegu jest dla niego JEDYNYM miejscem, w ktorym moze zobaczyc,
+      # jakie pola zostaly mu ustawione po tej stronie i ze `stage` to `dry-run`.
+      - name: what was rendered
+        env:
+          MEMBER_FILE: perimeter/members/${{ inputs.division }}-${{ inputs.project_id }}.yaml
+        run: |
+          {
+            echo "### Wyrenderowany plik czlonka — \`$MEMBER_FILE\`"
+            echo '```yaml'
+            cat "$MEMBER_FILE"
+            echo '```'
+            echo "sha256: \`$(sha256sum "$MEMBER_FILE" | cut -d' ' -f1)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # WHICH TOKEN OPENS THE PULL REQUEST DECIDES WHETHER THE PULL REQUEST IS EVER CHECKED — this is the
       # prerequisite that broke this channel end to end, measured 2026-08-11 (#1947), and it is written
       # here rather than only in docs/ because this is the step it breaks.
