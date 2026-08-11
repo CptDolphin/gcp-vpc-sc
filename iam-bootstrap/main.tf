@@ -90,6 +90,15 @@ resource "google_organization_iam_custom_role" "perimeter_writer" {
 # przypisanie i tylko je usuwa przy destroy.
 
 locals {
+  # KANAL MASZYNOWY ZA FLAGA — dokladnie tak samo jak warstwa IAM Deny nizej, i z dwoch powodow.
+  # (1) To jest sciezka WYPROWADZENIA DANYCH: temat Pub/Sub z prawem publikacji dla agenta chmury.
+  #     Wdrozenie, ktore go nie chce, ma go NIE MIEC, a nie „miec i nie uzywac".
+  # (2) Zasoby `google_project_service` i `google_project_service_identity` WYMAGAJA POSWIADCZEN JUZ NA
+  #     ETAPIE `plan` (provider konfiguruje sie leniwie, a te dwa zasoby go budza). Reszta tego stacku
+  #     planuje sie BEZ poswiadczen — i to jest wlasnosc, ktorej pilnuje selftest, bo dzieki niej bramka
+  #     na pull requescie nie potrzebuje dostepu do chmury. Domyslnie wylaczone = niezmiennik zostaje.
+  zarzadza_tematem_alertow = (var.monitoring_project_id != "" && var.manage_alert_topic) ? 1 : 0
+
   plan_org_roles = [
     "roles/accesscontextmanager.policyReader", # odczyt perimetru do terraform plan
     "roles/cloudasset.viewer",                 # pre-flight: czy projekt istnieje, czy nie jest w innym perimetrze
@@ -346,7 +355,7 @@ resource "google_project_iam_member" "apply_monitoring" {
 # od zera nie wymagalo ani jednego kliknięcia. `disable_on_destroy = false`: `terraform destroy` tego stacku
 # NIE MA prawa wylaczac uslugi, z ktorej moze korzystac cokolwiek innego w tym projekcie.
 resource "google_project_service" "pubsub" {
-  count = var.monitoring_project_id == "" ? 0 : 1
+  count = local.zarzadza_tematem_alertow
 
   project            = var.monitoring_project_id
   service            = "pubsub.googleapis.com"
@@ -354,7 +363,7 @@ resource "google_project_service" "pubsub" {
 }
 
 resource "google_pubsub_topic" "alerty" {
-  count = var.monitoring_project_id == "" ? 0 : 1
+  count = local.zarzadza_tematem_alertow
 
   project = var.monitoring_project_id
   name    = var.alert_topic_name
@@ -366,7 +375,7 @@ resource "google_pubsub_topic" "alerty" {
 # Temat bez subskrypcji wyrzuca kazda wiadomosc natychmiast — dowod odpalenia alertu przepadalby dokladnie
 # wtedy, gdy nikt nie patrzyl, czyli w jedynym przypadku, ktory ma znaczenie.
 resource "google_pubsub_subscription" "alerty" {
-  count = var.monitoring_project_id == "" ? 0 : 1
+  count = local.zarzadza_tematem_alertow
 
   project = var.monitoring_project_id
   name    = "${var.alert_topic_name}-ewidencja"
@@ -388,7 +397,7 @@ resource "google_pubsub_subscription" "alerty" {
 # ISTNIEJE jako usluga (`SERVICE_CONFIG_NOT_FOUND_OR_PERMISSION_DENIED`) — sprawdzone, zeby nikt nie
 # tracil na to czasu drugi raz.
 resource "google_project_service_identity" "monitoring_notification" {
-  count = var.monitoring_project_id == "" ? 0 : 1
+  count = local.zarzadza_tematem_alertow
 
   provider = google-beta
   project  = var.monitoring_project_id
@@ -399,7 +408,7 @@ resource "google_project_service_identity" "monitoring_notification" {
 # konsola pokazuje go jako aktywny, a nie przychodzi ANI JEDNA wiadomosc — czyli kanal, ktory wyglada
 # na uzbrojony i milczy. To ten sam ksztalt awarii co pusta lista `notificationChannels`.
 resource "google_pubsub_topic_iam_member" "monitoring_publisher" {
-  count = var.monitoring_project_id == "" ? 0 : 1
+  count = local.zarzadza_tematem_alertow
 
   project = var.monitoring_project_id
   topic   = google_pubsub_topic.alerty[0].name

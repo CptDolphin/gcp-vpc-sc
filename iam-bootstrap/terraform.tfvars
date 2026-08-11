@@ -42,3 +42,15 @@ deny_reader_principals = ["user:mail@rafalwalas.com"]
 # Wpisanie tu `false` = skasowanie polityki przy najbliższym apply. Przed tym przeczytaj GCP-0062;
 # po każdej zmianie potwierdzaj `tools/deny_check.sh --org 179248107504` (kod 0), nie samym „apply zielony".
 manage_deny_policy = true
+
+# --- kanal maszynowy alertow (Pub/Sub) --------------------------------------------------------------
+# WLACZONE 2026-08-11 (#1971). Temat `vpcsc-alerts` + subskrypcja-ewidencja + prawo publikacji dla agenta
+# powiadomien Monitoringu. Domyslnie ta flaga jest FALSE i to jest swiadome: temat Pub/Sub z prawem
+# publikacji to sciezka wyprowadzenia danych, wiec wdrozenie ma go dostac decyzja, a nie przy okazji.
+#
+# PO CO TU JEST: Cloud Monitoring nie ma publicznego API do listowania incydentow
+# (`GET /v3/projects/<p>/incidents` -> 404 „Method not found"), a w tym projekcie nie ma zadnego loga
+# alertingu. Bez tego kanalu nie da sie UDOWODNIC, ze alert odpalil — a alert bez takiego dowodu jest
+# deklaracja. Wiadomosc niesie pelny obiekt incydentu; podglad:
+#   gcloud pubsub subscriptions pull vpcsc-alerts-ewidencja --project=rwlab-vpcsc-adm-46bc --limit=5
+manage_alert_topic = true
