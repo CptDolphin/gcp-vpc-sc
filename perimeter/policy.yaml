@@ -110,35 +110,6 @@ onboarding:
   dry_run_min_days: 14 # minimum od dry_run_since do promocji
   clean_window_days: 7 # ostatnie N dni muszą być bez naruszeń
 
-  # WYJĄTEK OD BRAMKI PROMOCJI — jeden członek, jedna data ważności, jedna liczba.
-  #
-  # DLACZEGO wyjątek, a nie obniżenie `dry_run_min_days`: obniżenie poluzowałoby reżim dla wszystkich
-  # członków naraz i bezterminowo, a naprawiałoby problem, który dotyczy JEDNEGO projektu przez JEDEN dzień.
-  # Bramka udowodniła najpierw, że działa — odrzuciła tę samą promocję dwukrotnie, każdym z dwóch warunków
-  # osobno (przebieg validate 31471390266): „promocja do enforced po 1 dniach dry-run, wymagane minimum 14"
-  # oraz „6 naruszeń w oknie obserwacji". Dopiero po tym dowodzie omijamy ją świadomie i na piśmie.
-  #
-  # CO POKRYWA TE 6 NARUSZEŃ — policzone, nie oszacowane (raport 31471259129):
-  #   2 × `google.storage.buckets.list`      konto człowieka — krok 0 pomiaru („czy wywołanie DZIAŁA przed
-  #                                          promocją"); bez niego odmowa po promocji nic nie dowodzi
-  #   2 × `LoggingServiceV2.ListLogEntries`  konto człowieka — odczyt audit-logu, czyli samo mierzenie
-  #   1 × `DashboardsService.ListDashboards` sonda `boundary-probe` — CELOWO nieobjęta regułą: to ona ma
-  #   1 × `ConfigServiceV2.ListBuckets`      po promocji paść i być dowodem blokady
-  #
-  # Zero z nich pochodzi od dywizji ani od jakiegokolwiek workloadu — projekt jest pusty i utworzony
-  # wyłącznie pod ten pomiar. Wszystkie sześć to ruch obserwatora: albo pomiar, albo sonda, która ma paść.
-  # Promocja ich nie „zepsuje" w sensie, którego broni bramka — one są testem, nie użytkownikiem.
-  #
-  # Liczba 6, a nie „ignoruj": gdyby w oknie pojawił się siódmy przepływ — czyli cokolwiek, czego tu nie
-  # policzono — promocja staje z powrotem. Wyjątek wygasa 2026-08-12; rollback pomiaru usuwa go wcześniej.
-  promotion_waivers:
-    - member: lab-rwlab-vpcsc-t-alpha
-      justification: "projekt pusty, utworzony 2026-08-10 wylacznie pod pomiar blokady (C1); okna 14 dni nie da sie przeczekac bez zatrzymania kampanii, a wszystkie 6 naruszen w oknie to ruch obserwatora (krok 0, odczyt audit-logu, sondy boundary-probe celowo nieobjete regula) — zero od dywizji i zero od workloadu"
-      approved_by: mail@rafalwalas.com
-      expires: '2026-08-12'
-      accept_dry_run_days_below_minimum: true
-      accept_violations_up_to: 6
-
 # Budżet atrybutów: perimetr ma limit 6000 atrybutów NA KONFIGURACJĘ, liczony osobno dla enforced i dry-run
 # (docs: VPC SC quotas). Guard CI liczy zachowawczo i pada powyżej progu — próg, nie limit, żeby zapchanie
 # było wykryte z zapasem na reakcję (nowy profil / konsolidacja / decyzja o drugim perimetrze, DEC-1).
