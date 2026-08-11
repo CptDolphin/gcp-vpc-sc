@@ -28,7 +28,7 @@ terraform {
   # BEZ retention-lock: stan jest nadpisywany przy każdym apply, a retencja WORM zabrania
   # skasowania poprzedniej wersji — backend przestaje działać po pierwszym zapisie.
   backend "gcs" {
-    bucket = "<STATE_BUCKET>"
+    bucket = "rwlab-vpcsc-tfstate-46bc"
     prefix = "vpc-sc/perimeter"
   }
 }
