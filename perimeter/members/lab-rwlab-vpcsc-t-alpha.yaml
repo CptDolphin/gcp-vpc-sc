@@ -6,7 +6,7 @@ owner_group: lab@rafalwalas.com
 change_ref: 'manual:drugi czlonek perimetru — projekt pusty, przeznaczony na pomiar blokady (C1);
   ai-vertex zostaje w dry-run jako kontrola, ze promocja nie wciaga pozostalych'
 approved_by: mail@rafalwalas.com
-stage: enforced
+stage: dry-run
 dry_run_since: '2026-08-10'
 review_by: '2027-02-06'
 profiles:
