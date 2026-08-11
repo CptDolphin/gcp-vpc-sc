@@ -86,6 +86,9 @@ vpc_accessible_services:
 #   * `monitoring.project_id` (niżej w tym pliku)                                   -> ten projekt
 # Wpisany OBIEMA formami — ID i numerem — bo bramka dopasowuje `project_id` ALBO `project_number`, a plik
 # członka może nieść dowolny z nich. Jedna forma zostawiłaby obejście na wybór formatu w zgłoszeniu.
+# Numer jest potrzebny jeszcze z drugiego powodu: `tools/control_plane_check.py --live` (plan.yml) pyta API,
+# do jakiego projektu należy bucket stanu, a API odpowiada NUMEREM. Lista z samymi identyfikatorami nie da
+# się z tą odpowiedzią porównać — bramka pada wtedy z instrukcją, zamiast zgadywać.
 control_plane_projects:
   - rwlab-vpcsc-adm-46bc
   - "53079972993"
