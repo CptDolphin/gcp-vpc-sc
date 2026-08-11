@@ -10,7 +10,7 @@ jest nieprawdziwa, a plik, którego nikt nie widzi, nie jest dokumentacją forma
 | `snow-not-approved.json` | approval jeszcze trwa | **PADA** — wniosek w trakcie akceptacji nie wchodzi |
 | `snow-self-approved.json` | zatwierdzony przez grupę wnioskodawcy | **PADA** — samo-zatwierdzenie |
 | `snow-wrong-project.json` | ticket dotyczy innego projektu niż payload | **PADA** — podmiana celu po approvalu |
-| `dispatch-example.json` | kompletny payload `repository_dispatch` | wejście dla `gh api …/dispatches` |
+| `dispatch-example.json` | komplet wejść `workflow_dispatch` kanału ticketowego | wejście dla `gh workflow run intake.yml -f …` |
 | `vpcsc-violation-dryrun.json` | 4 naruszenia dry-run w kształcie zwracanym przez `gcloud logging read` | `violations_report.py` przypisuje **3** członkowi, 4. trafia do „spoza listy członków" |
 
 ```bash
