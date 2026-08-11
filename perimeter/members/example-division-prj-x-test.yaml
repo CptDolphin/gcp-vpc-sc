@@ -1,0 +1,19 @@
+schema_version: 1
+division: example-division
+project_id: prj-x-test
+project_number: '000000000000'
+owner_group: grp@example.com
+change_ref: manual:kanal 3 — architekt wpisuje czlonka recznie, dowodem autoryzacji
+  jest approval CODEOWNERS
+approved_by: net@example.com
+stage: dry-run
+dry_run_since: '2026-08-11'
+review_by: '2027-02-07'
+profiles:
+- name: vertex-online-serving
+  params:
+    caller_identities:
+    - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
+    access_levels:
+    - corp_network
+exceptions: []
