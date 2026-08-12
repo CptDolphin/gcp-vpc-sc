@@ -14,3 +14,7 @@ retention_days = 30
 # Ludzie z wglądem w surowy strumień odmów — JAWNIE i imiennie. W labie nikt poza właścicielem
 # organizacji; w większym wdrożeniu tu wchodzi grupa Security, nie „wszyscy z dostępem do repo".
 violations_reader_principals = ["user:mail@rafalwalas.com"]
+
+# Obserwator (`watch.yml`, krok `measure`) czyta widok zmian konfiguracji granicy. To TO SAMO konto
+# co `report_service_account`, wiec grant na widoku naruszen juz istnieje i nie jest tu duplikowany.
+watch_reader_service_account = "sa-vpcsc-plan@rwlab-vpcsc-adm-46bc.iam.gserviceaccount.com"
