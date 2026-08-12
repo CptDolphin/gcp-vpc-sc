@@ -91,10 +91,24 @@ members:
   stage: dry-run
   dry_run_since: '2026-08-12'
   review_by: '2027-02-08'
-  profiles:
+  profiles: &id001
   - name: vertex-online-serving
     params:
       caller_identities:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
       access_levels:
       - corp_network
+- schema_version: 1
+  division: lab
+  project_id: rwlab-vpcsc-t-delta
+  project_number: '1011692650024'
+  owner_group: lab@rafalwalas.com
+  change_ref: manual:PROBA ANTY-TAUTOLOGICZNA bramki pre-flightu (#2003) — projekt
+    celowo BEZ Private Google Access i BEZ prywatnej strefy DNS. Ten PR NIE JEST do
+    zmergowania; sluzy wylacznie zmierzeniu, ze bramka odrzuca i ze `plan` konczy
+    sie jako `skipped`.
+  approved_by: mail@rafalwalas.com
+  stage: dry-run
+  dry_run_since: '2026-08-12'
+  review_by: '2027-02-08'
+  profiles: *id001
