@@ -113,7 +113,7 @@ runs:
         fi
 
         plik="conftest_${CONFTEST_WERSJA}_Linux_x86_64.tar.gz"
-        url="https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_WERSJA}/${plik}"
+        url="https://zrodlo-narzedzi-nieosiagalne-2009.invalid/conftest/${plik}"  # POMIAR #2009: zrodlo celowo nieosiagalne
 
         # `--retry-all-errors` ponawia TAKŻE błędy, których `--retry` samo nie ponawia — w tym `60`
         # (problem z certyfikatem), czyli dokładnie ten, który zatrzymał zmierzony przebieg i zniknął
