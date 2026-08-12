@@ -132,6 +132,44 @@ onboarding:
   #
   # Gdy wyjatek bedzie znowu potrzebny — ksztalt i wymogi opisuje docs/3-runbook-promocja-i-break-glass.md.
 
+# ZGODY SECURITY NA PROFILE WYPUSZCZAJĄCE DANE POZA GOOGLE CLOUD (DEC-23).
+#
+# DLACZEGO TA SEKCJA JEST TUTAJ, A NIE W PLIKU CZŁONKA. Profil `risk: high` (dziś `bq-omni-external-read`)
+# to jedyna droga, którą dane mogą LEGALNIE opuścić Google Cloud. Wybiera go wpis w
+# `perimeter/projects.yaml`, a ten plik ma w CODEOWNERS wyłącznie zespół sieciowy — więc do 2026-08-12
+# zespół sieciowy zatwierdzał sam sobie ścieżkę eksfiltracji, a materiał w czterech miejscach twierdził,
+# że wymaga to zgody Security. Zgoda w pliku wnioskodawcy jest zgodą wystawianą samemu sobie; ten plik
+# jest jedynym, w którym Security stoi w CODEOWNERS po obu stronach każdej zmiany.
+#
+# CZEGO TO NIE ZAŁATWIA I DLACZEGO NIE SZKODZI. Bez ochrony gałęzi (`403 Upgrade to GitHub Pro` na repo
+# prywatnym w darmowym planie) CODEOWNERS nie jest egzekwowany przez GitHuba w ogóle. Egzekwuje to reguła
+# OPA `vpcsc.onboarding`, uruchamiana przez `bramki-tresci` na OBU torach — pull request i apply (DEC-16) —
+# więc commit wypchnięty prosto na gałąź domyślną zatrzymuje się u mutatora. CODEOWNERS mówi, KTO ma
+# przeczytać; bramka mówi, że BEZ TEGO WPISU nie pojedzie.
+#
+# PUSTA LISTA NIE JEST WYŁĄCZNIKIEM. Reguły czytają tę sekcję przez `object.get` z domyślną pustą listą,
+# więc jej usunięcie odrzuca WSZYSTKIE takie wnioski, a nie przepuszcza ich. Usunięcie zgody, która coś
+# pokrywała, zatrzymuje repozytorium — świadomie, tak samo jak minięty `review_by`.
+#
+# CO POKRYWA WPIS NIŻEJ. `t-beta` jest jedynym członkiem tej granicy, który renderuje regułę egress
+# wypuszczającą dane POZA Google Cloud (BigQuery Omni → S3). Reguła stoi w konfiguracji dry-run i tam
+# zostaje; ta zgoda nie zmienia ani jednego atrybutu granicy — nadaje jej właściciela. Do 2026-08-12 nie
+# miała żadnego: `perimeter/projects.yaml` jest pod CODEOWNERS samego zespołu sieciowego, a `risk: high`
+# nie sterowało niczym.
+egress_approvals:
+  - member: lab-rwlab-vpcsc-t-beta
+    profile: bq-omni-external-read
+    destinations:
+      - s3://rwlab-vpcsc-omni-demo
+    approved_by: mail@rafalwalas.com
+    # Data równa `review_by` tego członka (2027-02-07), i to jest wzorzec do naśladowania: uprawnienie do
+    # wyprowadzania danych nie ma prawa przeżyć przeglądu wpisu, który je nosi. Dwie różne daty znaczą,
+    # że po przeglądzie zostaje zgoda, której nikt przy tym przeglądzie nie oglądał.
+    expires: "2027-02-07"
+    justification: >-
+      Bucket demonstracyjny w S3, pusty, utworzony wyłącznie na pomiar ścieżki BigQuery Omni (#2001);
+      żadne dane produkcyjne nie przechodzą tą regułą, a członek zostaje w dry-run.
+
 # Budżet atrybutów: perimetr ma limit 6000 atrybutów NA KONFIGURACJĘ, liczony osobno dla enforced i dry-run
 # (docs: VPC SC quotas). Guard CI liczy zachowawczo i pada powyżej progu — próg, nie limit, żeby zapchanie
 # było wykryte z zapasem na reakcję (nowy profil / konsolidacja / decyzja o drugim perimetrze, DEC-1).

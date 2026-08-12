@@ -17,7 +17,6 @@ members:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
       access_levels:
       - corp_network
-  exceptions: []
 - schema_version: 1
   division: lab
   project_id: rwlab-vpcsc-t-alpha
@@ -40,7 +39,6 @@ members:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
       access_levels:
       - corp_network_and_region
-  exceptions: []
 - schema_version: 1
   division: lab
   project_id: rwlab-vpcsc-t-beta
@@ -76,7 +74,6 @@ members:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
       data_source_projects:
       - '222575464524'
-  exceptions: []
 - schema_version: 1
   division: lab
   project_id: rwlab-vpcsc-t-gamma
@@ -101,4 +98,3 @@ members:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
       access_levels:
       - corp_network
-  exceptions: []
