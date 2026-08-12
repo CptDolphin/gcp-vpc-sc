@@ -93,6 +93,38 @@ thresholds:
   # sie do czasu naprawy, wiec opoznienie alertu nie zmienia jego trescii.
   drift_persist_seconds: 3600
 
+# --- ZRODLO ODMOW I ZMIAN KONFIGURACJI --------------------------------------------------------------
+#
+# SEKCJA OPCJONALNA — I JEJ BRAK MA KONSEKWENCJE, KTORE TRZEBA ZNAC. Bez niej NIE POWSTAJA dwie polityki
+# alertu: „ruch odrzucony w trybie egzekwowanym" i „konfiguracja zmieniona poza pipeline'em". To jest
+# swiadomy wybor miedzy dwoma zlami: alert bez producenta chodzilby wiecznie na martwym-czlowieku (czyli
+# stalym falszywym alarmem, ktorego wszyscy nauczyliby sie klikac), a brak alertu jest przynajmniej
+# UCZCIWY — `docs/7-alerty.md` nazywa wtedy oba sygnaly jako niewdrozone.
+#
+# DLACZEGO TE WSPOLRZEDNE W OGOLE TU STOJA, ZAMIAST BYC METRYKA LOG-BASED (#2000). Metryka log-based
+# liczy WYLACZNIE wpisy przyjete przez Log Router swojego projektu. Naruszenie VPC-SC powstaje w logu
+# projektu-CZLONKA, a zmiana ACM — w logu ORGANIZACJI (`_Required`); do `rwlab-vpcsc-adm-46bc` oba
+# docieraja SINKIEM, czyli do magazynu, a nie na wejscie. Zmierzone para kontrolna na tej organizacji:
+# 5 wpisow ZAPISANYCH do projektu -> metryka log-based policzyla 5; realna odmowa egzekwowana
+# (`vpcServiceControlsUniqueIdentifier` potwierdzony w kubelku) dostarczona sinkiem do kubelka W TYM
+# SAMYM projekcie -> metryka policzyla 0. Do tego metryki log-based istnieja tylko per projekt
+# (`gcloud logging metrics` nie ma `--organization`), wiec dla zmian ACM nie ma ich gdzie postawic.
+#
+# Wspolrzedne pochodza z wyjsc stacku `violations-sink/` (`view_name`, `config_view_name`).
+violations_source:
+  project_id: "rwlab-vpcsc-adm-46bc"
+  bucket: "vpcsc-violations"
+  location: "eu"
+  # Widok naruszen — ten sam, ktory czyta `violations-report.yml`.
+  view: "vpcsc-violations"
+  # Widok zmian konfiguracji granicy (Admin Activity ACM). ROZLACZNY z powyzszym.
+  config_view: "vpcsc-violations-config"
+  # Okno liczenia. MUSI byc WIEKSZE niz kadencja `watch.yml`, inaczej miedzy przebiegami powstaje szczelina,
+  # w ktorej odmowa nie zostanie policzona przez ZADEN przebieg. 5400 s = godzinny cron + 50% zapasu na
+  # spoznienie (cron GitHuba jest best-effort). Nakladanie sie okien jest tu POZADANE: alert ma prog „> 0",
+  # wiec policzenie tej samej odmowy dwa razy nie zmienia decyzji, a przeoczenie — zmienia.
+  window_seconds: 5400
+
 # --- RUNBOOK ----------------------------------------------------------------------------------------
 # Kazda polityka alertu niesie `documentation.links` z URL-em na KONKRETNA kotwice w `docs/7-alerty.md`.
 # Alert bez procedury budzi czlowieka i zostawia go z pytaniem, co teraz — czyli jest polowa rozwiazania.
