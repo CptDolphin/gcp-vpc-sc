@@ -29,9 +29,10 @@ members:
     a AND wymaga obu. Ten czlonek jest celem promocji do enforced, wiec swiadomie
     dostaje mocniejszy warunek kontekstu'
   approved_by: mail@rafalwalas.com
-  stage: dry-run
+  stage: enforced
   dry_run_since: '2026-08-10'
   review_by: '2027-02-06'
+  unmeasured_peers_ack: 3
   profiles:
   - name: vertex-online-serving
     params:
