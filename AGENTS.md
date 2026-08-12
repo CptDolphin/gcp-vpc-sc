@@ -34,9 +34,10 @@ a nie HCL.
 | Environment `perimeter-apply` i `break-glass` mają **politykę gałęzi** zawężoną do gałęzi domyślnej | `tools/bootstrap_github.sh` (ustawia i **odczytuje z powrotem**) + asercja selftestu na tym skrypcie | `principalSet` konta apply pinuje samą nazwę environment, **nie ref** — więc bez tej polityki job z `environment: perimeter-apply` na DOWOLNEJ gałęzi wymienia token na tożsamość zapisującą perimetr. To ta polityka, a nie recenzent, jest zdaniem „perimetr zmienia się wyłącznie z gałęzi domyślnej". Działa na każdym planie GitHuba, więc jej brak jest dziurą, nie odstępstwem |
 | Kontrola **odczytana z API**, nie wywnioskowana z wysłanego ustawienia | odczyt zwrotny w `tools/bootstrap_github.sh` + asercja selftestu | wymagani recenzenci na environment i ochrona gałęzi prywatnego repo to **funkcje płatne**: na planie, który ich nie ma, API odrzuca żądanie i zostaje environment bez ani jednej reguły ochrony, opisany w komentarzach i dokumentacji jako bramka. Skrypt, który wysyła PUT i milczy o wyniku, produkuje dokładnie ten stan — kontrolę istniejącą wyłącznie w tekście |
 | **Oba** kanały automatyczne (dywizji i ticketowy) jadą `workflow_dispatch` (`actions: write`), NIGDY `repository_dispatch` | `contrib/action.yml` + triggery w `external-intake.yml` i `intake.yml` + asercje selftestu | `POST /dispatches` wymaga `contents: write`, czyli prawa zapisu do KODU perimetru. Złożone z gałęzią domyślną bez ochrony i z apply ruszającym z pushu na nią, poświadczenie dywizji staje się ścieżką do zmiany granicy z pominięciem WSZYSTKICH bramek — te wiszą na `pull_request`. Zmierzone: `actions: write` → 204, `contents: write` bez `actions` → 403 (rozłączne w obie strony) |
-| **Ochrona gałęzi domyślnej repo perimetru to PREREKWIZYT wdrożenia** | odczyt z API w `tools/bootstrap_github.sh` (błąd bez `--no-branch-protection "<powód>"`) + asercja selftestu | bramki treści (schema, OPA, budżet, pre-flight) uruchamiają się na `pull_request`; push prosto na gałąź domyślną nie uruchamia żadnej, a apply rusza właśnie stamtąd. Na darmowym planie dla repo PRYWATNEGO API odpowiada `403 Upgrade to GitHub Pro…` — wtedy to jest odstępstwo z powodem, nie brak do przemilczenia. Upublicznienie repo nie jest obejściem: jego treść to mapa dostępów do waszych danych |
+| **Ochrona gałęzi domyślnej repo perimetru to PREREKWIZYT wdrożenia** | odczyt z API w `tools/bootstrap_github.sh` (błąd bez `--no-branch-protection "<powód>"`) + asercja selftestu | push prosto na gałąź domyślną omija review — a apply rusza właśnie stamtąd. **Same bramki nie są już po tamtej stronie:** od DEC-16 cały ich zestaw biegnie także na ścieżce apply, więc zła treść nie zostanie ZASTOSOWANA. Ochrona gałęzi odpowiada za coś innego i nie do zastąpienia: żeby taka treść w ogóle nie WYLĄDOWAŁA na gałęzi domyślnej, czyli żeby historia repo nadal opisywała to, co przeszło review. Na darmowym planie dla repo PRYWATNEGO API odpowiada `403 Upgrade to GitHub Pro…` — wtedy to jest odstępstwo z powodem, nie brak do przemilczenia. Upublicznienie repo nie jest obejściem: jego treść to mapa dostępów do waszych danych |
 | Apply jest single-flight | `concurrency` w `apply.yml`, bez `cancel-in-progress` | przegrany apply pada na `Error 400: eTag … does not match` — **nic nie ginie po cichu**, ale ~80-100% nałożonych w czasie przebiegów wymaga ponowienia z ręki. Argumentem jest NIEZAWODNOŚĆ, nie cicha utrata reguł (DEC-6, skorygowane pomiarem 2026-08-07) |
 | Projekt z `policy.yaml` §`control_plane_projects` **nie wchodzi** do perimetru | reguła OPA w `onboarding.rego` (furtka: `control_plane_exception` w pliku członka) | **jedyne złamanie, którego `git revert` NIE COFA.** Bucket stanu leży w projekcie administracyjnym perimetru; w konfiguracji egzekwowanej konto apply traci dostęp do własnego stanu, bo woła z GitHub Actions — spoza granicy. Apply rewertu też potrzebuje stanu, więc pętli nie da się przerwać pipeline'em: wychodzi z niej człowiek z uprawnieniami org-level, ręcznie na żywej polityce |
+| Lista `control_plane_projects` **opisuje rzeczywistość**, a nie sama siebie | `tools/control_plane_check.py` — offline w `.github/actions/bramki-tresci` (backend ↔ `contract.state_bucket`, `monitoring.project_id` ↔ lista, `iam-bootstrap/terraform.tfvars` ↔ lista), `--live` w `.github/actions/bramki-zywe` (właściciel bucketa stanu z API). **Obie akcje woła i pull request, i `apply.yml`** — bramka należy do mutatora, nie do zdarzenia `pull_request` (DEC-16) | bramka wyżej chroni to, co NA LIŚCIE. Drugi bucket stanu, osobny projekt monitoringu albo backend przeniesiony jedną linijką w `versions.tf` wchodzą do perimetru jak zwykły wniosek, a bramka wygląda przy tym na uzbrojoną — chroni zbiór, który tylko wygląda na pełny. Dlatego numer projektu bucketa stanu musi być na liście **w obu formach**: API odpowiada NUMEREM |
 | Sekcja `control_plane_projects` **istnieje** (może być pusta) | `required` w `schemas/policy.schema.json` + asercja w selfteście | brak sekcji i pusta lista dają ten sam skutek — bez `required` bramkę rozbraja się „sprzątaniem" nieużywanego pola, a różnica między „zdecydowaliśmy, że nie ma takich projektów" a „nikt o tym nie pomyślał" znika z diffu |
 | Zakaz `ANY_IDENTITY` / `method: "*"` / `resources: ["*"]` | `perimeter.rego` na plan-JSON | reguła przestaje cokolwiek ograniczać, a wygląda tak samo (DEC-3). **Jedyny wyjątek: `ingress_to.resources = ["*"]` w regule baseline** — rozpoznawanej po ZGODNOŚCI TREŚCI z `policy.yaml` (tytuł + tożsamości + usługi + selektory) i tylko z niepustym `sources`, nigdy po nazwie (DEC-11). Egressowe `["*"]` nie ma wyjątku: znaczy „poza perimetrem" |
 | Cel reguły baseline nie zależy od członkostwa (`resources = ["*"]`) | `renderer.tftest.hcl` §10a + selftest (odcisk reguły przed/po dodaniu członka) | `ingress_to.resources` jest **`ForceNew`**, więc lista rosnąca z każdym członkiem oznaczała REPLACE obu reguł baseline przy każdym wniosku — w konfiguracji egzekwowanej okno bez reguły skanera dla wszystkich promowanych naraz. Zmierzone: `Plan: 4 to add, 1 to change, 2 to destroy` (DEC-11) |
@@ -44,9 +45,11 @@ a nie HCL.
 | Kontrakt buduje się polami, nigdy `jsonencode(<zbiorcze>)` | `contract.tf` + test w selfteście | kontrakt zamienia się w drugą kopię stanu (DEC-8) |
 | Kontrakt i stan w **różnych** bucketach | `precondition` w `contract.tf` | jeden błąd w IAM odsłania pełną mapę granicy (DEC-8) |
 | Obie publikacje kontraktu (bucket + asset release'u) wychodzą z **jednego kroku apply** | `test_kontrakt_dwie_publikacje` w selfteście (parsuje kroki `apply.yml`) | dwa kroki = dwa wyzwalacze i dwa odczyty stanu, więc dwie kopie cicho się rozjadą, a konsument nie ma jak zauważyć, że czyta starszą (DEC-8) |
-| Zakaz komendy commitującej całą konfigurację dry-run | guard w `validate.yml` | promocja WSZYSTKICH członków jednym wywołaniem, bez czego cofnąć (`docs/3` §A) |
+| Zakaz komendy commitującej całą konfigurację dry-run | guard w `.github/actions/bramki-tresci` (oba tory: PR i apply) | promocja WSZYSTKICH członków jednym wywołaniem, bez czego cofnąć (`docs/3` §A) |
 | Apply, który zaczyna EGZEKWOWAĆ granicę wobec nowego członka, **zatrzymuje się** — zwalnia go wyłącznie ręczne uruchomienie z listą promowanych | `.github/actions/bramka-promocji` + `tools/promotion_hold.py` (porównanie `stage: enforced` z `status.resources` żywego perimetru), wołane WYŁĄCZNIE przez `apply.yml`; asercje w selfteście na zbiorach, nie na słowach | merge staje się egzekwowaniem: jednowyrazowy diff `stage: dry-run` → `enforced` odcina ruch bez kroku, na którym człowiek cokolwiek naciska. To jedyna zmiana w tym repo, której cofnięcie konfiguracji NIE jest natychmiastowym cofnięciem skutku (zmierzone: 46 s do apply, 78 s do powrotu ruchu). Wykrycie musi iść z porównania deklaracji ze stanem granicy — diff commitów znika przy `workflow_dispatch` i przy ponowieniu przebiegu, a etykieta i nazwa gałęzi są pod kontrolą autora zmiany (DEC-17) |
-| Akcje przypięte 40-znakowym SHA | guard w `validate.yml` + Dependabot | kto kontroluje tag, kontroluje pipeline mający prawo zmieniać granicę organizacji |
+| Akcje przypięte 40-znakowym SHA | guard w `.github/actions/bramki-tresci` (oba tory) + Dependabot | kto kontroluje tag, kontroluje pipeline mający prawo zmieniać granicę organizacji |
+| Każda decyzja CYTOWANA w repo ma sekcję w `docs/0-decyzje.md`, a zbiór decyzji pokrywa zbiór startera | `tools/decisions_check.py` — bez argumentu w `.github/actions/bramki-tresci` (oba tory), `--wzgledem` w `starter-drift.yml` + testy obu przypadków w selfteście | `starter-drift` porównuje świadomie sam WSKAŹNIK (`.starter-sync` kontra `main` startera), bo porównanie drzewa świeciłoby na czerwono zawsze — wartości środowiska są dokładnie tym, co repo wdrożone ma mieć. Wskaźnik odpowiada więc na pytanie „czy ktoś przeniósł commity", a nie „czy przeniósł całą ich treść". Zmierzone: wskaźnik wskazywał aktualny `main`, bramka była zielona, a rejestr nie miał DWÓCH decyzji — jednej cytowanej w DZIEWIĘCIU miejscach tego samego repo (`apply.yml`, `plan.yml`, `validate.yml`, `onboarding.rego`, bramka promocji). Porównujemy ZBIÓR NUMERÓW, nigdy treść: treść wdrożenia różni się od szablonu legalnie (DEC-20) |
+| Warstwa IAM Deny jest **odczytywana**, nie zakładana | rola `vpcScDenyReader` + `manage_deny_policy` w `iam-bootstrap`, `tools/deny_check.sh`, testy trzech werdyktów w selfteście | `iam.denypolicies.*` nie należy do żadnej roli org-admina, a API na brak uprawnienia odpowiada tym samym `403` co na brak zasobu — więc bez tej roli zdanie „guardrail stoi" jest nieweryfikowalne, a `terraform plan` pokazuje `1 to add` niezależnie od stanu faktycznego. Zapisu tej warstwy **nie da się** zawęzić: `create`/`update`/`delete` mają `customRolesSupportLevel = NOT_SUPPORTED` i niesie je wyłącznie `roles/iam.denyAdmin` |
 
 ## Placeholdery — wszystko, co trzeba podmienić
 
@@ -66,7 +69,7 @@ a nie HCL.
 | `578145433296` | folder pod wariant testowy ze scoped policy (`docs/2` §4a) |
 | `<SHA_WYDANIA>` | tag/SHA paczki bramek przypinanej przez repozytoria zespołów |
 | `@your-org/*` | realne zespoły GitHuba w `CODEOWNERS` |
-| zakresy IP w `access-levels/corp.yaml` | korporacyjne zakresy — w szablonie są adresy TEST-NET z RFC 5737 |
+| zakresy IP w `access-levels/corp.yaml` | korporacyjne zakresy — w szablonie są adresy TEST-NET z RFC 5737. **To jedyny placeholder pilnowany przez bramkę:** dopóki stoją tam adresy dokumentacyjne, poziom musi nieść `armed: false` z powodem, a konfiguracja EGZEKWOWANA nie może go referować bez wygasającego `unarmed_accepted_until` (DEC-19). Po podmianie na własne: `armed: true` + `source_of_truth` + `reviewed` |
 
 Nazwy przykładowe (`example-division`, `prj-example-*`, `000000000000`, `RITM0000001`, `example.com`) są
 **jawnie fikcyjne i spójne w całym repo**. Jeśli zobaczysz nazwę wypadającą z tej konwencji, to jest błąd —
@@ -84,7 +87,7 @@ guard `test_samodzielnosc` w selfteście pilnuje tego przy każdym przebiegu.
   i `yaml.safe_load` biorą przy duplikacie klucza OSTATNI wpis i nie mówią nic. Na liście ten sam przypadek
   wywraca plan (`Duplicate object key`). Przy pliku wspólnym duplikat jest normalnym wynikiem scalenia.
 - **W `perimeter/projects.yaml` NIE MA KOMENTARZY i nie da się ich tam włożyć.** Plik jest w postaci
-  kanonicznej (`yaml.safe_dump`, bramka w `validate.yml`), a `safe_dump` komentarzy nie zna — pierwszy zapis
+  kanonicznej (`yaml.safe_dump`, bramka w `.github/actions/bramki-tresci`), a `safe_dump` komentarzy nie zna — pierwszy zapis
   bota skasowałby je bez śladu. Uzasadnienie zmiany idzie w pole `change_ref` i w opis pull requesta.
 - **Plik czytaj i zapisuj WYŁĄCZNIE przez `tools/projects_file.py`**, nigdy `yaml.safe_load` wprost. Tam
   siedzi strict loader, wyliczanie klucza, wykrywanie duplikatów i dopisywanie wpisu bez przepisywania pliku.
@@ -101,6 +104,20 @@ guard `test_samodzielnosc` w selfteście pilnuje tego przy każdym przebiegu.
   **zdalny backend pod własnym prefiksem**, rozłącznym z tym, który `main.tf` oddaje kontom CI: warunek IAM
   na buckecie to `startsWith`, więc wspólny (albo tylko *prawie* rozłączny) prefiks daje pipeline'owi
   perimetru prawo zapisu do stanu, z którego biorą się jego własne uprawnienia.
+- **Reguła egress do zasobu zewnętrznego wygląda inaczej niż każda inna: `permissions`, nie `methods`.**
+  To nie jest niekonsekwencja katalogu profili, tylko wymóg API — zmierzony, nie wyczytany. Z ustawionym
+  `external_resources` perimetr odrzuca selektory metod (`With 'external_resources' set, MethodSelector is
+  only allowed to have permission`), a z uprawnień przyjmuje **dokładnie jedno**: `externalResource.read`.
+  Prawdziwe uprawnienia IAM BigQuery (`bigquery.jobs.create`, `bigquery.tables.getData`) są odrzucane, mimo że
+  figurują w `gcloud access-context-manager supported-services describe`; `externalResource.read` w tym
+  katalogu nie figuruje. Katalog usług kłamie tu w obie strony, dlatego `check_supported_services.py`
+  świadomie pomija operacje z `permissions`, a wartości pilnuje reguła OPA zbudowana z pomiaru.
+- **Reguła egress nie przyjmuje `access_levels_from` — mimo że API to potrafi.** `egressFrom.sources.accessLevel`
+  i `sourceRestriction` istnieją w schemacie providera; ten renderer ich **nie składa**. Dopóki nie składa,
+  przyjęcie pola oznaczałoby deklarację „wymagaj sieci korporacyjnej" cicho zamienioną na regułę autoryzującą
+  z dowolnego miejsca — zmierzone: schema, OPA i guard budżetu **przepuszczały i liczyły** to pole, a
+  `egress_from.sources` w planie zostawało puste. Zamknięte na trzech warstwach (schema rozdzielona per
+  kierunek, reguła OPA, asercja `terraform test`), każda mówi, co zrobić przy realnej potrzebie.
 - **Testy są w połowie negatywne.** Bramka, która nigdy nie odrzuca, przechodzi każdy test pozytywny
   i nie chroni niczego. Dodając bramkę, dodaj też przypadek, w którym ma PAŚĆ.
 - **Bramka ludzka na apply jest opisana jako warstwa OSOBNA i warunkowa, a nie jako fundament.** Kusi, żeby
@@ -118,11 +135,19 @@ python3 selftest/selftest.py          # rozpakowuje starter do katalogu tymczaso
 ```
 
 Wymaga na PATH: `terraform` (1.15.5), `conftest`, `tflint`, `python3` z `pyyaml`; opcjonalnie `actionlint`
-i `check-jsonschema` (ich brak daje SKIP z nazwą, nigdy ciche zielone). Oczekiwany wynik: **184/184**.
+i `check-jsonschema` (ich brak daje SKIP z nazwą, nigdy ciche zielone).
 
-Bez `tflint` na PATH przebieg kończy się na **181/181** i wypisuje SKIP z nazwą — trzy asercje
-(`--init` plus lint obu stacków) po prostu się nie wykonują. Liczba niższa niż 184 nie jest błędem
-startera, tylko informacją, czego w tym środowisku nie sprawdzono.
+Oczekiwany wynik: **wszystkie asercje zielone** — ostatni zmierzony przebieg to **530/530** w środowisku
+**bez `tflint`** na PATH (wtedy część lintu wypisuje SKIP z nazwą i po prostu się nie wykonuje).
+**Porównuj z przebiegiem na `main`, nie z liczbą zapisaną tutaj**: liczba asercji rośnie z każdą bramką,
+a różni się też między środowiskami — brakujące narzędzie zmienia mianownik, nie licznik. Czerwona jest
+dopiero asercja z `FAIL`; niższa suma sama w sobie nie jest błędem startera, tylko informacją, czego
+w tym środowisku nie sprawdzono.
+
+Pułapka środowiskowa (kosztowała pełny przebieg): gdy `terraform` na PATH jest **shimem** menedżera wersji
+bez ustawionej wersji globalnej, testy odpalane w katalogu tymczasowym padają na `No version is set for
+shim: terraform` i wyglądają na regresję materiału. Uruchamiaj selftest z katalogiem prawdziwego binarnego
+`terraform` w PATH.
 
 Sam skan samodzielności (bez terraforma i conftesta, sam Python) da się uruchomić na dowolnej ścieżce —
 przydaje się tam, gdzie materiał jest publikowany razem z innymi katalogami:

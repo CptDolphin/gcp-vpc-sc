@@ -1,7 +1,15 @@
-.terraform/
-*.tfstate
-*.tfstate.*
+# Artefakty planu i stanu — nigdy do repo. Plan zawiera pełną treść perimetru (tożsamości, zakresy IP),
+# a state dodatkowo metadane backendu.
 *.tfplan
+*.tfplan.binary
 plan.json
 declarations.json
 violations.json
+violations.md
+.terraform/
+.terraform.lock.hcl.bak
+# Stan lokalny — backend jest zdalny (GCS), wiec plik stanu na dysku znaczy, ze ktos uruchomil
+# apply bez backendu. Wtedy tym bardziej nie moze trafic do repo: to pelna mapa granicy razem
+# z metadanymi backendu.
+*.tfstate
+*.tfstate.*
