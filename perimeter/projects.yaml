@@ -28,14 +28,7 @@ members:
     pozostalych; #1939: access level corp_network -> corp_network_and_region. To ZAWEZENIE
     — poziom skladany dziedziczy warunek corp_network i doklada wlasny (regions PL/DE),
     a AND wymaga obu. Ten czlonek jest celem promocji do enforced, wiec swiadomie
-    dostaje mocniejszy warunek kontekstu; #2001: doklada profil vertex-batch-training,
-    czyli PIERWSZA W TYM WDROZENIU regule egress w konfiguracji EGZEKWOWANEJ. Nosnikiem
-    egressu byl dotad t-beta, ale jego etap to dry-run, a `egress_rules_enforced`
-    filtruje po etapie CZLONKA — regula na t-beta nie miala jak trafic do `status`
-    bez promocji calego czlonka. t-alpha jest juz enforced, wiec ta sama regula wchodzi
-    do egzekwowania bez ruszania czyjegokolwiek etapu i bez bramki promocji. Cel `222575464524`
-    (rwlab-vpcsc-t-div) jest projektem testowym POZA perimetrem i nie niesie zadnych
-    danych'
+    dostaje mocniejszy warunek kontekstu'
   approved_by: mail@rafalwalas.com
   stage: enforced
   dry_run_since: '2026-08-10'
@@ -47,16 +40,6 @@ members:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
       access_levels:
       - corp_network_and_region
-  - name: vertex-batch-training
-    params:
-      pipeline_identities:
-      - serviceAccount:sa-egress-probe@rwlab-vpcsc-t-alpha.iam.gserviceaccount.com
-      access_levels:
-      - corp_network_and_region
-      training_identities:
-      - serviceAccount:sa-egress-probe@rwlab-vpcsc-t-alpha.iam.gserviceaccount.com
-      data_source_projects:
-      - '222575464524'
   exceptions: []
 - schema_version: 1
   division: lab
