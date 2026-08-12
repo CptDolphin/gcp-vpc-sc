@@ -98,6 +98,17 @@ gh workflow run starter-drift.yml && gh run watch
    dziś wiadomo, że kłamał. **Czerwony `starter-drift` = promocja czeka**, bo narzędzia produkujące dowód
    są częścią tego, co jest przestarzałe.
 
+0b. **Zmierz, że wywołanie DZIAŁA, zanim je zablokujesz** — inaczej krok 6 nie ma z czym porównać:
+
+```bash
+gh workflow run boundary-probe.yml -f project=<PROJEKT_CZLONKA> -f expect=open && gh run watch
+```
+
+   Przelot musi być ZIELONY. Chroniona usługa z wyłączonym API i brak roli IAM zwracają ten sam
+   `PERMISSION_DENIED`, co odmowa VPC-SC — bez tego pomiaru „przed" nie da się odróżnić granicy, która
+   zadziałała, od projektu, który i tak był zepsuty. Sonda nazywa te trzy stany osobno i nie zaliczy
+   dwóch pierwszych jako dowodu.
+
 1. Uruchom raport za pełne okno:
 
 ```bash
@@ -108,7 +119,13 @@ gh workflow run violations-report.yml -f days=14
    naruszenia — to nie jest „szum", tylko lista wywołań, które przestaną działać.
 
 3. Otwórz PR promocyjny: w pliku członka zmień **wyłącznie** `stage: dry-run` → `stage: enforced`.
-   Dołącz `violations.json` (artefakt) i wypełnij sekcję *Evidence* w szablonie PR-a.
+   Wypełnij sekcję *Evidence* w szablonie PR-a.
+
+   `violations.json` **dołącza się sam**: `validate.yml` pobiera artefakt `violations` z ostatniego udanego
+   przebiegu `violations-report.yml` na gałęzi domyślnej i podaje go regułom OPA. Dlatego krok 1 nie jest
+   formalnością — bez świeżego raportu (starszego niż `clean_window_days` też nie licząc) bramka odrzuci
+   promocję na „brak raportu naruszeń dla okna obserwacji". **Ręcznie dopisanego pliku bramka nie przyjmie
+   i przyjąć nie może**: dowód, który promujący sam sobie pisze, mierzy jego zdanie, nie ruch.
 
 4. Bramki muszą przejść. Jeśli `promotion_gate` odrzuca — nie obchodź go zmianą `dry_run_since`. To pole jest
    datą wejścia do dry-run, nie parametrem do dostrojenia.
@@ -135,7 +152,20 @@ gh workflow run apply.yml -f promocje="<dywizja>-<project_id>" && gh run watch
    włączoną; obie warstwy się składają, bo dają co innego: recenzent to **druga tożsamość**, bramka
    promocji to **drugi świadomy akt w momencie skutku**.
 
-6. **Zmierz po apply** (done = zmierzone):
+6. **Zmierz po apply** (done = zmierzone). Najpierw ta sama sonda co w kroku 0b, tylko z drugim
+   oczekiwaniem — to jest **jedyny** dowód, że granica cokolwiek blokuje:
+
+```bash
+gh workflow run boundary-probe.yml -f project=<PROJEKT_CZLONKA> -f expect=blocked && gh run watch
+```
+
+   Zielony przelot znaczy komplet czterech rzeczy naraz: chronione wywołanie bez reguły zostało odmówione
+   **z powodem VPC-SC** (nie z braku roli, nie z wyłączonego API), ruch dozwolony regułą ingress NADAL
+   przechodzi, usługa spoza `restricted_services` NADAL działa (czyli projekt nie jest po prostu zepsuty),
+   a odmowa ma niezależny drugi dowód we wpisie audytowym. Czerwony przelot mówi, KTÓRA z tych czterech
+   nie zaszła.
+
+   Reszta pomiaru:
 
 ```bash
 terraform -chdir=terraform output members_enforced        # członek na liście
@@ -191,6 +221,13 @@ kategorii i odrzuci je tak samo jak każde inne wywołanie spoza granicy:
 | **Monitoring i eksport metryk** | „to przecież nasze" — a to nadal wywołanie API spoza perimetru | `restricted_services` + reguła, albo projekt monitoringu w perimetrze |
 | **CI/CD deployujący z zewnątrz** | zespół pamięta o aplikacji, nie o pipeline'ie, który ją wdraża | profil `cicd-deploy-from-outside` |
 | **Rzadkie zadania** (kwartalny audyt, roczna recertyfikacja) | statystycznie nie mieszczą się w oknie | świadoma decyzja: wydłużyć okno albo przyjąć ryzyko i zapisać je |
+| **Raport naruszeń tego perimetru** (`violations-report.yml`) | „to przecież nasza własna bramka" — a czyta audit-log projektu członka kontem planu, czyli woła `logging.googleapis.com` (usługę chronioną) spoza granicy | `baseline_ingress` §`platform-violations-read` — **musi istnieć PRZED pierwszą promocją** |
+
+> **Ten ostatni wiersz jest inny od pozostałych i dlatego stoi osobno.** Wszystkie powyżej odcinają ruch
+> DYWIZJI, a ten odcina **dowód**. W dry-run raport dopisuje członkowi naruszenie od samego siebie, więc okno
+> nigdy się nie wyczyści; po promocji ten sam odczyt jest odmawiany, a workflow pada — czyli pierwsza udana
+> promocja zabiera `violations.json` wszystkim następnym. Zmierzone na żywej organizacji 2026-08-10:
+> 1 z 34 naruszeń członka pochodziło od `sa-vpcsc-plan`, metoda `LoggingServiceV2.ListLogEntries`.
 
 **Jak to sprawdzić, zanim promujesz:** przejdź listę z właścicielem projektu i zapytaj wprost *„co się
 uruchamia u was rzadziej niż raz na dwa tygodnie?"*. To pytanie wyłapuje więcej niż przeglądanie logów, bo
