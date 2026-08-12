@@ -98,3 +98,9 @@ members:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
       access_levels:
       - corp_network
+  - name: bq-omni-external-read
+    params:
+      query_identities:
+      - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
+      external_resources:
+      - s3://rwlab-dowod-bez-zgody
