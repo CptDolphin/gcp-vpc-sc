@@ -77,3 +77,28 @@ members:
       data_source_projects:
       - '222575464524'
   exceptions: []
+- schema_version: 1
+  division: lab
+  project_id: rwlab-vpcsc-t-gamma
+  project_number: '1021525184483'
+  owner_group: lab@rafalwalas.com
+  change_ref: 'manual:czwarty czlonek perimetru — jedyny, ktory przechodzi PELNA sciezke
+    onboardingu od zera (utworzenie projektu -> pre-flight -> wpis -> bramki -> plan
+    -> apply -> potwierdzenie w spec), zamiast zostac dodany przy stawianiu toru.
+    Wchodzi do dry-run i tylko tam: celem jest zmierzenie SCIEZKI i czasu, nie granicy
+    — ta zostala zmierzona na t-alpha (#1941). Profil vertex-online-serving z access
+    levelem corp_network, czyli DOMYSLNY wariant wniosku: kazdy mocniejszy wariant
+    mierzylby przypadek szczegolny, a ta sciezka ma opisac wniosek typowy (#1936,
+    wklad do #1989)'
+  approved_by: mail@rafalwalas.com
+  stage: dry-run
+  dry_run_since: '2026-08-12'
+  review_by: '2027-02-08'
+  profiles:
+  - name: vertex-online-serving
+    params:
+      caller_identities:
+      - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
+      access_levels:
+      - corp_network
+  exceptions: []
