@@ -54,9 +54,11 @@ members:
     w polityce. Swiadomy kompromis: sam eu_only jest SLABSZY niz corp_network (kazdy
     adres z DE/FR/NL go spelnia). Dopuszczalne, bo t-beta jest pustym projektem testowym,
     a konfiguracja egzekwowana jest pusta. W realnym wdrozeniu regions nalezy do KOMPOZYCJI,
-    nie stoi samo w regule'
+    nie stoi samo w regule; #1997: PR DOWODOWY, NIE DO MERGE — sprawdza, ze po naprawie
+    bramki (DEC-18) promocja BEZ dowodu czystego okna nadal jest odrzucana. Kontrakt
+    mowi dla t-beta `dry-run`, wiec to jest PRZEJSCIE i bramka ma stanac.'
   approved_by: mail@rafalwalas.com
-  stage: dry-run
+  stage: enforced
   dry_run_since: '2026-08-11'
   review_by: '2027-02-07'
   profiles:
