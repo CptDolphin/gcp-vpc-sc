@@ -69,3 +69,23 @@ members:
       data_source_projects:
       - '222575464524'
   exceptions: []
+- schema_version: 1
+  division: lab
+  project_id: rwlab-vpcsc-t-widmo
+  project_number: '179248107504'
+  owner_group: lab@rafalwalas.com
+  change_ref: 'manual:sonda #1979 — numer, ktory NIE JEST projektem (to numer tej
+    organizacji), zeby zmierzyc, czy ACM waliduje istnienie celu przy zapisie do konfiguracji
+    dry-run. Wpis jest tymczasowy i schodzi rewertem w tym samym zadaniu'
+  approved_by: mail@rafalwalas.com
+  stage: dry-run
+  dry_run_since: '2026-08-12'
+  review_by: '2027-02-08'
+  profiles:
+  - name: vertex-online-serving
+    params:
+      caller_identities:
+      - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
+      access_levels:
+      - corp_network
+  exceptions: []
