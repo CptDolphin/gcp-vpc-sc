@@ -112,7 +112,7 @@ runs:
             || nie_wykonaly_sie "pip install $PAKIETY_PYTHON"
         fi
 
-        plik="conftest_${CONFTEST_WERSJA}_Linux_x86_64.tar.gz"
+        plik="conftest_${CONFTEST_WERSJA}_Darwin_arm64.tar.gz"  # POMIAR #2009: pobranie sie uda, suma NIE bedzie pasowac
         url="https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_WERSJA}/${plik}"
 
         # `--retry-all-errors` ponawia TAKŻE błędy, których `--retry` samo nie ponawia — w tym `60`
