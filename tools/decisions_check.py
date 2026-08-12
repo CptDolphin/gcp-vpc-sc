@@ -39,6 +39,12 @@ H1 — stary i nowy — przy obu bramkach na zielono. Sprawdzamy więc trzy rzec
   * **licznik w preambule** rejestru („N rozstrzygnięć", też słownie) — z liczbą sekcji;
   * **rejestr ma dokładnie JEDEN nagłówek H1** — dwa znaczą rozwiązany na oślep konflikt merge'a.
 
+CZWARTE SPRAWDZENIE (też domyślne): CZY KAŻDY NUMER WYSTĘPUJE DOKŁADNIE RAZ. Trzy sprawdzenia wyżej pytają
+o ISTNIENIE sekcji, a mapa numerów zwija powtórzenia do jednego klucza — więc drugi `## DEC-27` był dla nich
+wszystkich niewidzialny, łącznie z licznikiem. Numery przydziela KOLEJNOŚĆ MERGE'A, a nadaje je odczyt
+„ostatnia sekcja + 1"; gdy dwie gałęzie czytają ten sam stan, obie biorą tę samą liczbę. Zmierzone w jeden
+dzień: CZTERY przenumerowania DEC (19, 24, 27, 28), każde ręczne i każde po scaleniu.
+
 Najtańszą naprawą każdego z nich jest USUNIĘCIE liczby z prozy: zbiór sekcji jest źródłem prawdy, a zdanie
 o jego rozmiarze utrzymuje wyłącznie czyjaś uwaga. Bramka nie zakazuje jej wpisać — pilnuje, żeby wpisana
 przestała być zielona w dniu, w którym przestaje być prawdziwa (DEC-20).
@@ -54,9 +60,21 @@ CZEGO ŚWIADOMIE NIE SPRAWDZAMY (żeby zielony wynik nie znaczył więcej, niż 
   * TREŚCI deklaracji poza zakresem i licznikiem. „Kilkanaście decyzji" przejdzie, bo nie jest liczbą.
     Bramka domyka formę, w której to realnie gniło — zakres i liczebnik — a nie prozę w ogóle.
 
-Użycie (patrz `.github/actions/bramki-tresci/action.yml` i `.github/workflows/starter-drift.yml`):
+GDZIE TE SPRAWDZENIA BIEGAJĄ — I DLACZEGO NIE WSZĘDZIE TAK SAMO (DEC-30). Sprawdzenie 1 pyta konsumenta
+rejestru: „czy cytujesz decyzję, której nie niesiesz". To pytanie do ROZPAKOWANEGO repozytorium, które
+kopiuje ze startera podzbiór. W drzewie SAMEGO startera odpowiedź jest z założenia inna: leżą tam testy
+negatywne cytujące numery nieistniejące z premedytacją (fixture dowodzący, że `--wzgledem` gryzie), więc
+sprawdzenie 1 świeciłoby tam na czerwono na treści POPRAWNEJ — a naprawiałoby się je kasowaniem testu.
+Sprawdzenia 2a-2d pytają o coś innego — „czy repozytorium mówi o swoim rejestrze prawdę" — i to pytanie
+należy przede wszystkim do startera, bo tam rejestr MIESZKA. `--tylko-deklaracje` uruchamia więc drugą
+grupę bez pierwszej. Zmierzone: bez tego trybu deklaracja w `selftest/skan_samodzielnosci.py` przeżyła
+dwadzieścia jeden decyzji, bo bramka nie widziała katalogu, w którym stała.
+
+Użycie (patrz `.github/actions/bramki-tresci/action.yml`, `.github/workflows/starter-drift.yml`
+i `test_kompletnosc_decyzji` w selfteście startera):
     python3 tools/decisions_check.py
     python3 tools/decisions_check.py --wzgledem /tmp/0-decyzje-startera.md
+    python3 tools/decisions_check.py --tylko-deklaracje --root /sciezka/do/startera
 """
 import argparse
 import pathlib
@@ -113,13 +131,42 @@ POMIJANE_ROZSZERZENIA = {".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip", ".tar"
 
 
 def zdefiniowane(tekst: str) -> dict[str, int]:
-    """Numery decyzji mające w tym tekście własną sekcję -> numer linii nagłówka."""
+    """Numery decyzji mające w tym tekście własną sekcję -> numer linii PIERWSZEGO nagłówka.
+
+    Słownik zwija powtórzenia z premedytacją — pytanie „czy sekcja istnieje" ma jedną odpowiedź. Za to,
+    czy ten sam numer nie występuje DWA RAZY, odpowiada `powtorzone()` niżej; bez niej drugi `## DEC-27`
+    byłby niewidzialny dla wszystkich trzech sprawdzeń tego pliku, łącznie z licznikiem sekcji.
+    """
     out = {}
     for i, linia in enumerate(tekst.splitlines(), 1):
         m = NAGLOWEK.match(linia)
         if m:
             out.setdefault(m.group(1), i)
     return out
+
+
+def powtorzone(tekst: str) -> dict[str, list[int]]:
+    """Numery decyzji mające WIĘCEJ NIŻ JEDNĄ sekcję -> numery linii wszystkich nagłówków.
+
+    DLACZEGO OSOBNO. Ten rejestr rośnie z gałęzi równoległych, a numer nadawany jest przez odczyt
+    ostatniej sekcji i dodanie jedynki — czyli przez odczyt stanu, który druga gałąź właśnie zmienia.
+    Zmierzone w jeden dzień (2026-08-12): CZTERY przenumerowania DEC (19, 24, 27, 28), za każdym razem
+    po scaleniu i zawsze ręcznie. Dwa tryby awarii kończą się tym samym obrazem w pliku:
+
+      * scalenie „zostawmy oba" — rozwiązanie konfliktu, w którym obie sekcje zostają na jednym numerze;
+      * synchronizacja liczona od ZAPAMIĘTANEJ bazy — trójstronny merge nie wie, że „ours" dostało tę
+        samą zmianę inną drogą, i wciąga cudzą sekcję DRUGI RAZ, przy ZERO konfliktów.
+
+    Drugiego trybu nie widzi tu nic innego: sekcje są na miejscu, cytowania się zgadzają, a licznik
+    liczy klucze słownika, więc dwie sekcje na jednym numerze liczą się jako jedna. Sprawdzenie
+    nagłówków H1 łapie tylko szczególny przypadek, w którym powtórzył się nagłówek NAJWYŻSZEGO poziomu.
+    """
+    out: dict[str, list[int]] = {}
+    for i, linia in enumerate(tekst.splitlines(), 1):
+        m = NAGLOWEK.match(linia)
+        if m:
+            out.setdefault(m.group(1), []).append(i)
+    return {numer: linie for numer, linie in out.items() if len(linie) > 1}
 
 
 def preambula(tekst: str) -> list[tuple[int, str]]:
@@ -188,7 +235,19 @@ def main() -> int:
     ap.add_argument("--root", default=".", help="katalog repozytorium (domyślnie bieżący)")
     ap.add_argument("--wzgledem", metavar="PLIK",
                     help="plik `0-decyzje.md` startera — sprawdź, czy zbiór decyzji tutaj go POKRYWA")
+    ap.add_argument("--tylko-deklaracje", action="store_true",
+                    help="sprawdź WYŁĄCZNIE, czy repo mówi o swoim rejestrze prawdę (zakres, licznik, "
+                         "jeden H1, jeden numer = jedna sekcja) — bez pytania o rozwiązywalność cytowań")
     args = ap.parse_args()
+
+    # Wykluczenie, nie ciche pierwszeństwo. `--wzgledem` pyta o POKRYCIE zbioru, `--tylko-deklaracje`
+    # wyłącza pytania o zbiór i zostawia pytania o prozę — złożone razem jedno z nich musiałoby zostać
+    # zignorowane, a bramka wywołana z flagą, która nic nie robi, jest gorsza niż bramka niewywołana:
+    # wygląda w logu tak samo jak działająca.
+    if args.tylko_deklaracje and args.wzgledem:
+        print("::error::--tylko-deklaracje i --wzgledem wykluczaja sie: pierwsza flaga wylacza porownanie "
+              "zbiorow, ktore druga wlasnie zamawia", file=sys.stderr)
+        return 1
 
     root = pathlib.Path(args.root).resolve()
     plik = root / DECYZJE
@@ -203,8 +262,11 @@ def main() -> int:
 
     # 1. Każdy cytowany numer ma sekcję. Sortujemy po NUMERZE, nie leksykalnie — inaczej lista błędów
     #    czyta się jak losowa (DEC-10 przed DEC-2), a to jest lista do odhaczania.
+    #    Pomijane przy `--tylko-deklaracje`: to jedyne sprawdzenie w tym pliku, które pyta o ZBIÓR
+    #    cytowań, a więc jedyne, na które drzewo startera odpowiada inaczej niż rozpakowane repo —
+    #    leżą tam testy negatywne cytujące numery nieistniejące z premedytacją (DEC-30).
     odsylacze, zakresy = skanuj(root)
-    for numer in sorted(odsylacze, key=lambda s: int(s.split("-")[1])):
+    for numer in (sorted(odsylacze, key=lambda s: int(s.split("-")[1])) if not args.tylko_deklaracje else []):
         if numer not in tutaj:
             # KOD PRZED DOKUMENTACJĄ na liście miejsc. Odsyłacz w pustkę z `apply.yml` albo z reguły OPA
             # znaczy co innego niż ten sam odsyłacz w prozie: pierwszy stoi w pliku, który coś wykonuje.
@@ -259,6 +321,20 @@ def main() -> int:
             f"rozwiązany przez zostawienie obu wersji nagłówka — rejestr ma wtedy dwa różne zdania "
             f"o sobie samym i oba wyglądają na obowiązujące")
 
+    # 2d. Każdy numer decyzji występuje DOKŁADNIE RAZ. Sprawdzenia 1-3 pytają, czy sekcja ISTNIEJE,
+    #     a `zdefiniowane()` zwija powtórzenia do jednego klucza — więc drugi `## DEC-27` nie zapala tu
+    #     niczego: cytowania się zgadzają, zakres się zgadza, a licznik liczy klucze, nie nagłówki.
+    #     Tak wygląda konflikt numeru rozwiązany przez „zostawmy oba" ORAZ synchronizacja liczona od
+    #     zapamiętanej bazy (trójstronny merge wciąga cudzą sekcję drugi raz przy ZERO konfliktów).
+    #     Numery decyzji przydziela KOLEJNOŚĆ MERGE'A — dwie sekcje na jednym numerze znaczą, że dwie
+    #     gałęzie policzyły „ostatnia + 1" z tego samego stanu.
+    for numer, linie in sorted(powtorzone(tresc).items(), key=lambda kv: int(kv[0].split("-")[1])):
+        problemy.append(
+            f"{DECYZJE}: {numer} ma {len(linie)} sekcje (linie: {', '.join(map(str, linie))}), a ma mieć "
+            f"JEDNĄ. Albo konflikt numeru rozwiązano przez zostawienie obu wersji, albo synchronizacja "
+            f"liczona od nieaktualnej bazy wciągnęła cudzą sekcję drugi raz — w obu przypadkach jedna "
+            f"z tych decyzji nie ma własnego numeru i nie da się jej zacytować")
+
     # 3. Pokrycie zbioru startera — tylko gdy mamy z czym porównać.
     if args.wzgledem:
         wzorzec = pathlib.Path(args.wzgledem)
@@ -293,8 +369,14 @@ def main() -> int:
     # ZMIERZYŁA. Liczba sprawdzonych deklaracji stoi obok celowo: „0 deklaracji" znaczy, że repo
     # o swoim zakresie nie twierdzi nic, i to jest stan zalecany, a nie brak sprawdzenia.
     rozpietosc = f" ({numery[0]}…{numery[-1]})" if numery else ""
-    print(f"OK: {len(tutaj)} decyzji w {DECYZJE}{rozpietosc}, {len(odsylacze)} cytowanych numerow "
-          f"rozwiazanych, {len(deklaracje)} deklaracji zakresu zgodnych ze zbiorem{ile_wzorzec}")
+    # W trybie deklaracji NIE piszemy „N cytowanych numerow rozwiazanych": policzone one są (jedno
+    # przejście po drzewie zbiera oba wyniki), ale rozwiązywalności nikt nie sprawdzał. Podsumowanie
+    # ma mówić, co bramka ZMIERZYŁA — nie co miała pod ręką. Zielony wiersz obiecujący sprawdzenie,
+    # którego nie było, jest dokładnie tym trybem awarii, dla którego powstał cały ten plik.
+    ile_cytowan = "" if args.tylko_deklaracje else f", {len(odsylacze)} cytowanych numerow rozwiazanych"
+    tryb = " [tylko deklaracje]" if args.tylko_deklaracje else ""
+    print(f"OK{tryb}: {len(tutaj)} decyzji w {DECYZJE}{rozpietosc}{ile_cytowan}, "
+          f"{len(deklaracje)} deklaracji zakresu zgodnych ze zbiorem{ile_wzorzec}")
     return 0
 
 

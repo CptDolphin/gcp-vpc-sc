@@ -7,6 +7,8 @@ bo nic jej nie mierzyło. Kompletności rejestru pilnują dwie bramki — `tools
 decyzja ma sekcję) i `starter-drift` w trybie `--wzgledem` (zbiór decyzji pokrywa zbiór startera, DEC-20).
 Ta sama bramka pilnuje też, żeby żadne zdanie w repozytorium nie deklarowało zakresu ani liczby decyzji
 innej niż realna — wpisać ją wolno, ale przestaje być zielona w dniu, w którym przestaje być prawdziwa.
+To sprawdzenie biegnie w trybie `--tylko-deklaracje` także na drzewie SAMEGO startera, bo rozpakowanie
+nie tworzy `selftest/`, `examples/` ani `README.md`, a zdanie o rejestrze zgniło dokładnie tam (DEC-30).
 
 Każda pozycja ma tę samą strukturę: **decyzja** · **dlaczego** · **co odrzucono i dlaczego**. Odrzucone warianty są
 tu celowo — bez nich decyzja wygląda na jedyną możliwą, a była wyborem. Jeśli któryś z nich wróci jako propozycja,
@@ -2212,3 +2214,148 @@ dostępu, więc taka zmiana nie może przejść „przy okazji".
   przy klawiaturze. Zamiast tego procedura mówi wprost, że timera NIE MA, i pisze to w issue postmortem.
 * **Zostawienie `dry_run_since` bez zmian i dopisanie zdania do runbooka.** Dokument nie jest bramką;
   ta sama obietnica „świeżego okna" stała w runbooku od początku i nie była egzekwowana przez nic.
+
+---
+
+## DEC-30 — Bramka deklaracji czyta TAKŻE drzewo startera; bramka cytowań zostaje przy rozpakowanym repo
+
+**Decyzja.** `tools/decisions_check.py` dostaje tryb `--tylko-deklaracje`. Uruchamia wyłącznie sprawdzenia
+pytające, czy repozytorium mówi o swoim rejestrze prawdę (zakres · licznik w preambule · jeden nagłówek H1 ·
+jeden numer = jedna sekcja), a pomija sprawdzenie rozwiązywalności cytowań. W tym trybie bramka biegnie na
+**drzewie samego startera** — jako asercja selftestu, `test_kompletnosc_decyzji` §8. Tryb domyślny, razem
+z pytaniem o cytowania, zostaje dokładnie tam, gdzie był: na rozpakowanym repozytorium perimetru, w akcji
+`bramki-tresci`, na obu torach (DEC-16). `--tylko-deklaracje` i `--wzgledem` **wykluczają się kodem wyjścia**,
+nie cichym pierwszeństwem.
+
+**Powód, zmierzony.** DEC-20 dała zdaniu o rozmiarze rejestru właściciela — ale tylko w jednym drzewie.
+Bramka biegła na repozytorium ROZPAKOWANYM, a rozpakowanie nie tworzy `selftest/`, `examples/`,
+`experiments/`, `README.md` ani `install.sh`. Deklaracja stojąca w którymkolwiek z nich nie była czytana
+przez nic. Zmierzone na `selftest/skan_samodzielnosci.py`: komunikat reguły kształtu deklarował zakres
+rejestru urwany na ósmej decyzji. W dniu wpisania (2026-08-07) **był prawdziwy** — rejestr miał wtedy
+dokładnie osiem sekcji. Przez następne pięć dni doszło ich dwadzieścia jeden i żadna bramka nie miała
+jak tego zauważyć: `starter-drift` porównuje wskaźnik commitu, skan samodzielności pomija własny plik
+z definicji, a bramka deklaracji nie widziała katalogu, w którym to zdanie stało.
+
+To jest ten sam tryb awarii co w DEC-20, o warstwę wyżej. Tam liczbę utrzymywała czyjaś uwaga i nie
+mierzyło jej NIC. Tu mierzy ją bramka — ale nie w tym katalogu, w którym liczba stoi. Skutek jest
+identyczny i tak samo niewidoczny: wszystko zielone, zdanie nieprawdziwe.
+
+**Dlaczego to osobny TRYB, a nie ta sama komenda z innym `--root`.** Bo pytania mają różny zasięg, a nie
+tylko różny katalog. Sprawdzenie cytowań pyta KONSUMENTA rejestru: „powołujesz się na uzasadnienie, którego
+nie niesiesz". Repozytorium perimetru jest konsumentem — kopiuje ze startera podzbiór, więc odsyłacz
+w pustkę znaczy tam niekompletny sync. Starter konsumentem nie jest: rejestr w nim MIESZKA i jest kompletny
+z definicji. Zostaje tam za to coś, czego w rozpakowanym repo nie ma i być nie powinno — **testy negatywne
+cytujące numery nieistniejące z premedytacją**. `selftest/selftest.py` cytuje numer celowo wysoki i nigdy
+nienadany, żeby dowieść, że `--wzgledem` widzi decyzję niecytowaną. (Tej sekcji nie wolno go zacytować
+dosłownie — rejestr jedzie do repozytorium perimetru i sam podlega sprawdzeniu cytowań, więc numer wpisany
+tutaj wprost wywróciłby bramkę TAM. Stała siedzi w `test_kompletnosc_decyzji` pod nazwą `NUMER_FIXTURE`.)
+Pełna bramka puszczona na drzewie startera jest więc czerwona na
+treści POPRAWNEJ, a najtańszą naprawą czerwieni na poprawnej treści jest zawsze skasowanie treści — tu
+akurat testu, który pilnuje drugiej połowy tej samej bramki. Repozytorium mówi to o sobie w trzech
+miejscach („guard, który wywraca się o własne źródło, uczy tylko usuwania guardów"); ta decyzja nie robi
+wyjątku od własnej zasady.
+
+Premisa jest ASERCJĄ, nie założeniem: selftest §8b sprawdza, że tryb domyślny na drzewie startera
+naprawdę jest czerwony i naprawdę z powodu tego fixture'u. Gdy ta asercja kiedyś spadnie — fixture zniknął
+— powód istnienia `--tylko-deklaracje` trzeba przeliczyć od nowa, zamiast dopisywać do niego wyjątki.
+
+**Czego to NIE daje — świadomy residual.** Cytowania w `README.md`, `install.sh`, `selftest/`, `examples/`
+i `experiments/` nadal nie są rozwiązywane przez nic. Literówka w numerze — przestawione cyfry, odsyłacz
+do decyzji jeszcze nienadanej — przejdzie w tych pięciu miejscach. Przyjmujemy to, bo cena zamknięcia
+jest wyższa niż szkoda: każdy
+przyszły test negatywny musiałby składać numer z kawałków, żeby uciec przed własną bramką, a bramka
+wymuszająca ucieczki przed sobą samą uczy dokładnie tego, przed czym ma chronić. Reszta drzewa — cały
+`template/` i całe `docs/` — jest w tym sprawdzeniu OD ZAWSZE, bo rozpakowanie właśnie z nich powstaje.
+
+**Odrzucone.**
+- *Podbicie liczby w komunikacie do realnego zakresu.* Naprawa, którą DEC-20 nazywa po imieniu: przywraca
+  prawdziwość na jeden dzień i nie zmienia niczego w tym, kto ją utrzymuje. Ta zmiana byłaby nieprawdziwa
+  jeszcze przed scaleniem — rejestr rośnie w tym samym pull requeście, który liczbę podbija.
+- *Zakaz deklaracji zakresu (odrzucaj każdą parę `DEC-a`…`DEC-b`).* Odrzucone już w DEC-20 i z tego samego
+  powodu: bramka pyta o ZGODNOŚĆ, nie o styl. Zgodności da się dowieść, stylu nie.
+- *Pełny `decisions_check` na drzewie startera + lista wyjątków dla fixture'ów.* Lista wyjątków jest dziurą,
+  która rośnie, i nikt jej nie mierzy — dokładnie zarzut, który DEC-20 stawia allowliście „plików
+  porównywalnych". Do tego pierwszym wpisem byłby test dowodzący, że ta sama bramka działa.
+- *Sklejenie fixture'owego numeru z kawałków (`"DEC" + "-<liczba>"`), żeby pełna bramka zadziałała wszędzie.*
+  Kusi, bo samo narzędzie tak robi z własnymi wzorcami — ale tam sklejenie jest KONIECZNE: narzędzie skanuje
+  drzewa, z których nie da się go wyłączyć. Tutaj byłoby ucieczką przed bramką, której zasięg jest właśnie
+  przedmiotem tej decyzji. Naprawiamy zasięg, nie zapis testu.
+- *Osobny workflow dla bramki deklaracji startera.* Kolejny przypięty SHA-em checkout, kolejny check do
+  utrzymania i kolejna nazwa w regułach ochrony gałęzi — dla sprawdzenia, które w istniejącym jobie kosztuje
+  ułamek sekundy. Selftest już dziś czyta drzewo startera (`rozjazdy_pinow()` skanuje CAŁE repo, akcja
+  `contrib` czytana jest ze startera), więc to nie jest nowy rodzaj zależności, tylko kolejna asercja.
+- *Zgłoszenie zamiast czerwieni.* Odpowiedź jak w DEC-20: zgłoszenia nikt nie przypisuje. Ta deklaracja
+  przeżyła dwadzieścia jeden decyzji przy zielonych bramkach — zgłoszenie przeżyłoby tyle samo.
+
+---
+
+## DEC-31 — Kierunków naruszenia są trzy, a wykluczenie stoi na uprawnieniu żądanym na celu, nie na tożsamości
+
+**Decyzja.** `tools/violations_report.py` czyta członka trzema źródłami w ustalonej kolejności i nazywa klasę
+naruszenia w raporcie:
+
+1. **rekord naruszenia** — `ingressViolations[].targetResource` / `egressViolations[].source` (bez zmian);
+2. **`protoPayload.resourceName`** — dla wpisów, które NIE MAJĄ żadnej z tych dwóch tablic;
+3. **zbiór poglądowy** (`metadata.resourceNames` + `resource.labels.project_id`) — ostatnia deska, żeby nowy
+   kształt wpisu nie wypadł z rachunku po cichu; brak wszystkich trzech = raport PADA (fail-closed).
+
+`SERVICE_NOT_ALLOWED_FROM_VPC` (naruszenie z `vpcAccessibleServices`) jest **trzecim kierunkiem** — ani
+wejściem, ani wyjściem — i **wchodzi do liczby czytanej przez `promotion_gate`**.
+
+Z liczby wypada natomiast **artefakt projektu rozliczeniowego**: rekord egress, w którym naraz
+`sourceType == "Resource"`, cel jest projektem spoza listy członków, a zbiór uprawnień żądanych na celu jest
+równy DOKŁADNIE `{serviceusage.services.use}`. Wykluczone wpisy idą do pliku wykluczeń obok dowodu i do
+raportu — nad słowo „czysto", z tożsamością wołającego. Raport zamyka tabela **wszystkich** klas
+`violationReason` z tego okna: ile wpisów, z jakiego pola czytany członek, gdzie poszły przypisania.
+
+**Dlaczego.** Raport nie jest dokumentem informacyjnym, tylko wejściem bramki promocji, a te dwie klasy myliły
+się w **przeciwne** strony — obie kończąc złą decyzją o włączeniu egzekwowania.
+
+*Fałszywie alarmujące.* Wywołanie z domyślnym `billing/quota_project` operatora dotyka dwóch projektów naraz:
+sondowanego (w perimetrze) i rozliczeniowego (poza nim). Granica księguje to jako `egressViolations` ze
+źródłem w członku, więc raport mówił właścicielowi „twoje dane wychodzą" i wysyłał go po regułę egress — po
+prawdziwą dziurę — za wywołanie, w którym nie wypłynął ani jeden bajt. Zmierzone na 865 wpisach z sinka
+(okno 2026‑08‑11 09:21 → 2026‑08‑12 16:33): **160 takich wpisów**, 159 od zredagowanej tożsamości człowieka,
+wszystkie z `targetResourcePermissions == ["serviceusage.services.use"]`. Licznik członka spadł z 714 do 562
+i z 19 do 11; dwóm pozostałym członkom nie zmienił się ani o jeden.
+
+*Fałszywie uspokajające.* `SERVICE_NOT_ALLOWED_FROM_VPC` nie ma żadnej z dwóch tablic naruszeń. Licznik
+zbudowany na nich jest na tę klasę ślepy **z definicji**, a jej tryb awarii to workload członka, który po
+promocji przestaje działać. W tym samym oknie było jej **132 wpisy**, w tym 112 odmów już egzekwowanych.
+
+Sygnaturą wykluczenia jest **uprawnienie żądane na celu**, bo `serviceusage.services.use` nie daje odczytu
+żadnych danych — wpis, na którego celu żądane jest cokolwiek ponad to, przestaje pasować i wraca do liczby.
+Wykluczenie zbudowane w ten sposób **nie umie schować wypływu**, i to jest jego cała wartość. Kontrola na tych
+samych danych: cały realny egress w oknie miał `sourceType: "Network"` i uprawnienia danych
+(`storage.buckets.list` 243×, `storage.objects.list` 175×, `storage.buckets.get` 5×) — sygnatura nie objęła
+go ani razu.
+
+Kolejność źródeł też jest wynikiem pomiaru: `protoPayload.resourceName` niósł numer projektu po stronie
+perimetru w **132/132** wpisów bez rekordów i zgadzał się z rekordem tam, gdzie rekord był (**733/733**).
+Zbiór poglądowy zbiera natomiast wszystko, co wygląda na projekt — w 11 wpisach dokładał numer projektu
+WOŁANEGO obok właściwego członka. Gdy takim numerem jest inny członek, wpis obciąża promocję kogoś, kto tego
+wywołania nie wykonał; test na tym kształcie pokazuje 2 przypisania przed zmianą i 1 po.
+
+**Co odrzucono i dlaczego.**
+
+* **Zostawienie artefaktu w liczbie „dla bezpieczeństwa".** Kuszące, bo kierunek błędu jest alarmujący, a nie
+  uspokajający. Odrzucone: to jest ten sam sygnał, po którym poznaje się realną eksfiltrację, a zaśmiecony
+  przestaje być czytany. Po ćwiczeniu drogi awaryjnej jeden członek miał 636 wpisów w oknie 14 dni i powrót
+  do `enforced` wymagał waivera — każdy fałszywy wpis kosztuje decyzję, nie tylko miejsce w raporcie.
+* **Wykluczanie po tożsamości wołającego** („to tylko człowiek przy laptopie"). To byłaby lista wymówek:
+  rośnie, nikt jej nie rewiduje, a workload z tym samym błędem konfiguracji przestaje być widoczny. Dlatego
+  wykluczamy po własności DANYCH, a tożsamość zostaje **wypisana** — raport mówi wprost, że tożsamość
+  workloadu na tej liście oznacza realny przepływ do naprawy przed promocją.
+* **Wykluczanie po `violationReason`** (`RESOURCES_NOT_IN_SAME_SERVICE_PERIMETER` w całości). Jedna linijka
+  mniej i dziura: ta sama klasa powstaje przy każdym wywołaniu dotykającym dwóch perimetrów, także takim,
+  które naprawdę czyta dane po drugiej stronie.
+* **Osobny klucz w `violations.json`.** Ten plik jest wejściem OPA, gdzie każdy klucz udaje nazwę członka;
+  dodatkowy klucz albo psuje kontrakt dowodu, albo chowa wykluczenia przed recenzentem. Wykluczenia jadą
+  osobnym plikiem — tą samą drogą, co ruch platformy.
+* **Filtr `dryRun` w sinku albo w raporcie, żeby uciszyć odmowy egzekwowane.** Odrzucone dwa razy i tu też:
+  pole istnieje WYŁĄCZNIE przy naruszeniu dry-run, więc `dryRun="false"` nie łapie nigdy niczego, a odmowa
+  egzekwowana znaczy „ktoś jest blokowany teraz" i ma być widoczna.
+* **Podnoszenie `protoPayload.resourceName` do roli kontroli krzyżowej rekordu.** Sprawdzone na żywych
+  danych: zgodność 733/733, więc kontrola nic by dziś nie złapała, a na wpisie obcego projektu w fixturze
+  (gdzie anonimizacja podstawiła numer członka) fałszywie by krzyczała. Rekord zostaje autorytatywny,
+  `resourceName` używamy tam, gdzie rekordu nie ma.
