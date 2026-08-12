@@ -244,6 +244,52 @@ baseline_ingress:
         # dokładnie tę jedną, której używa `gcloud logging read`.
         methods: ["LoggingServiceV2.ListLogEntries"]
 
+  # =================================================================================================
+  # KANAREK ACCESS LEVELU — dwie reguły różniące się WYŁĄCZNIE wymaganym poziomem (#2002, DEC-19)
+  # =================================================================================================
+  # CO MIERZĄ. Cztery sondy `boundary-probe.yml` dowodzą, że granica ODMAWIA. Żadna nie dowodzi, że
+  # access level kogokolwiek WPUSZCZA — a to jest druga połowa tej kontroli i połowa, której awaria
+  # (zakres przestał pasować) odcina własnych zamiast wpuścić obcych. Zaobserwować ją można wyłącznie
+  # przychodząc z miejsca, które poziom spełnia; przy warunku `ip_subnetworks` znaczy to „z sieci
+  # korporacyjnej", a runner CI stoi poza nią. Stąd para poziomów `ci_probe_*` (access-levels/corp.yaml)
+  # i te dwie reguły.
+  #
+  # DLACZEGO PARA, A NIE JEDNA SONDA. Pojedyncze „przeszło" nie mówi nic: ta sama metoda przechodzi też
+  # wtedy, gdy reguła jest szersza, niż wygląda, gdy projekt nie jest w perimetrze i gdy usługa wypadła
+  # z `restricted_services`. Te dwie reguły mają IDENTYCZNĄ tożsamość i identyczny kształt; różni je
+  # jedno pole — access level. Każda WSPÓLNA przyczyna odmowy daje ten sam wynik po obu stronach, więc
+  # rozjazd może pochodzić już tylko z poziomu.
+  #
+  # DLACZEGO DWIE RÓŻNE METODY. Bo reguła ingress dopasowuje się po (tożsamość × źródło × usługa ×
+  # metoda) i przy tej samej metodzie wystarczyłaby JEDNA pasująca reguła, żeby wywołanie przeszło —
+  # sonda „niespełniona" wchodziłaby wtedy regułą „spełnioną" i para przestałaby cokolwiek mierzyć.
+  # Obie metody są read-only i opisują KONFIGURACJĘ LOGOWANIA (metryki log-based, sinki), nie dane:
+  # to jest świadomy wybór celu o zerowej wartości dla eksfiltracji.
+  #
+  # BLAST-RADIUS. Reguły baseline dotyczą każdego członka (`resources: ["*"]`, DEC-11), więc grant
+  # obejmuje wszystkie projekty w konfiguracji: `sa-vpcsc-plan` (konto PLANU, read-only, to samo, które
+  # już ma tu regułę `platform-violations-read`) zyskuje dwie metody odczytu konfiguracji logowania.
+  # Koszt budżetu: ~10 atrybutów z 6000. Cofnięcie: usunięcie tych dwóch bloków + apply.
+  - title: canary-level-match
+    identities:
+      - "serviceAccount:sa-vpcsc-plan@rwlab-vpcsc-adm-46bc.iam.gserviceaccount.com"
+    # Poziom, który ta tożsamość SPEŁNIA -> wywołanie ma PRZEJŚĆ. To jest jedyne miejsce w całej
+    # konfiguracji, w którym ktokolwiek kiedykolwiek widział access level wpuszczający.
+    access_levels: ["ci_probe_match"]
+    operations:
+      - service: logging.googleapis.com
+        methods: ["MetricsServiceV2.ListLogMetrics"]
+
+  - title: canary-level-mismatch
+    identities:
+      - "serviceAccount:sa-vpcsc-plan@rwlab-vpcsc-adm-46bc.iam.gserviceaccount.com"
+    # TA SAMA tożsamość, poziom wymieniający KOGO INNEGO -> wywołanie ma dostać odmowę VPC-SC
+    # (`NO_MATCHING_ACCESS_LEVEL`). Reguła jest obecna i poprawna; nie autoryzuje, bo kontekst nie pasuje.
+    access_levels: ["ci_probe_mismatch"]
+    operations:
+      - service: logging.googleapis.com
+        methods: ["ConfigServiceV2.ListSinks"]
+
 # Monitoring perimetru — metryki log-based i alerty (terraform/monitoring.tf).
 #
 # DLACZEGO to jest tutaj, a nie „w monitoringu": perimetr bez alertu jest granicą, o której dowiesz się od
