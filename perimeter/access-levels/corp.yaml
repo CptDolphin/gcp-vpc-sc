@@ -10,6 +10,35 @@
 # warstwy: `schemas/access-level.schema.json` w CI i test w selfteście.
 # Pole `title` jest wolnym tekstem — tam myślniki i spacje są w porządku.
 
+# ================================================================================================
+# UZBROJENIE (`armed`) — pole, które odróżnia poziom DZIAŁAJĄCY od poziomu, który tylko tak wygląda
+# ================================================================================================
+# Poziom oparty na zakresach IP ma dokładnie jeden tryb awarii, którego NIE WIDAĆ: zakres przestaje
+# pasować (zmienił się koncentrator VPN, doszło biuro, dostawca przenumerował pulę NAT) — a obiekt
+# w Access Context Managerze wygląda identycznie jak przedtem. Pusty zbiór dopasowań jest nieodróżnialny
+# od „nikt nie próbował". Dowiadujesz się w dniu, w którym reguła zaczyna egzekwować: ruch dywizji ginie.
+#
+# Ten sam kształt bierze się z placeholderów, których nikt nie podmienił. Zakresy dokumentacyjne
+# (RFC 5737: 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24; RFC 3849: 2001:db8::/32) nie należą do
+# ŻADNEGO hosta na świecie, więc poziom na nich oparty nie autoryzuje NIKOGO — mimo że w konsoli
+# i w `describe` wygląda na kompletny.
+#
+#   armed: false  = „ten poziom dziś nie wpuszcza nikogo i wiemy o tym"  → wymaga `unarmed_reason`
+#   armed: true   = „ktoś realnie może stąd przyjść"                     → przy `ip_subnetworks` wymaga
+#                   `source_of_truth` + `reviewed` (skąd wartość i kiedy potwierdzona)
+#   (brak pola)   = `true`
+#
+# Egzekwują to `precondition` w terraform/perimeter.tf (renderer — warstwa, której nie da się pominąć).
+# Poziom `armed: false` referowany przez konfigurację EGZEKWOWANĄ wywraca plan, chyba że niesie
+# `unarmed_accepted_until` z datą w przyszłości — świadomy, WYGASAJĄCY zapis „ta reguła nie wpuszcza
+# dziś nikogo i to jest OK". Pełne uzasadnienie: DEC-19 w docs/0-decyzje.md.
+#
+# CZEGO TO NIE ROBI: nie sprawdza, czy zakres jest PRAWDZIWY — tego z konfiguracji nie da się orzec.
+# Odpowiedzią na „skąd wiesz, że wartość jest aktualna" jest para: (1) `reviewed` + `review_interval_days`,
+# czyli zegar, który po N dniach czerwieni plan, oraz (2) KANAREK — para reguł `canary-*` w policy.yaml,
+# która sama generuje ruch przez access level i sprawdza, że poziom spełniony WPUSZCZA, a niespełniony
+# ODMAWIA (`boundary-probe.yml -f kanarek=uzbrojony`). Zegar wykrywa zaniedbanie, kanarek — rozjazd.
+
 schema_version: 1
 
 access_levels:
@@ -17,6 +46,14 @@ access_levels:
     title: "Corporate network"
     # Zakresy podmień na własne. Trzymamy je w repo (a nie w zmiennej CI), bo to informacja jawna
     # i chcemy widzieć w PR, gdy ktoś dokłada nowy zakres — to jest realne poszerzenie granicy.
+    #
+    # W TEJ ORGANIZACJI POZIOM ZOSTAJE NIEUZBROJONY I TO JEST DECYZJA, NIE ZALEGŁOŚĆ. Lab nie ma sieci
+    # korporacyjnej: nie ma zakresu, który dałoby się tu wpisać uczciwie. Adres runnera CI rotuje i jest
+    # pulą dostawcy (wpisanie jej autoryzowałoby cudze pipeline'y), adres stanowiska człowieka jest jeden,
+    # nierotowalny i osobowy. Zamiast wpisywać wartość „na teraz", poziom mówi wprost, że nie wpuszcza
+    # nikogo, a mechanizm access levelu jest mierzony osobno — kanarkiem (DEC-19).
+    armed: false
+    unarmed_reason: "lab nie ma sieci korporacyjnej — zakresy sa placeholderami RFC 5737 i nie wpuszczaja nikogo"
     ip_subnetworks:
       - "203.0.113.0/24" # TEST-NET-3 (RFC 5737) — placeholder, podmień
       - "198.51.100.0/24" # TEST-NET-2 (RFC 5737) — placeholder, podmień
@@ -40,6 +77,13 @@ access_levels:
     title: "Break-glass (incident only)"
     # Wąski zakres bastionu/stanowiska awaryjnego. NIE jest przypisywany do żadnego członka w normalnym
     # trybie — używa go wyłącznie procedura break-glass, a każde użycie zostawia ślad w audit-logach.
+    #
+    # NIEUZBROJONY = PROCEDURA BREAK-GLASS NIE JEST GOTOWA, i to jest tu ważniejsze niż gdzie indziej:
+    # poziom awaryjny sprawdza się dopiero w awarii, więc „wygląda na gotowy" znaczy „dowiemy się
+    # w najgorszym możliwym momencie". Dopóki stoi tu placeholder, zielony plan i zielone bramki NIE
+    # znaczą „mamy break-glass" — znaczą „mamy plik". Uzbrojenie należy do #1943 (procedura), nie tutaj.
+    armed: false
+    unarmed_reason: "procedura break-glass nieuzbrojona (#1943): brak adresu bastionu, placeholder nie wpuszcza nikogo"
     ip_subnetworks:
       - "192.0.2.10/32" # TEST-NET-1 (RFC 5737) — placeholder, podmień
 
@@ -74,6 +118,29 @@ access_levels:
     # adres z regionu; API przyjmuje taką zmianę bez ostrzeżenia (ZMIERZONE 2026-08-12, #1939: odpowiedź 200
     # z `combiningFunction: OR`). Dlatego OR wymaga pola `or_reason` — schemat, reguła `vpcsc.onboarding`
     # i `precondition` renderera pilnują tego niezależnie od siebie (DEC-15).
+    #
+    # ================================================================================================
+    # TEN POZIOM STOI W KONFIGURACJI EGZEKWOWANEJ I NIE AUTORYZUJE DZIŚ NIKOGO — ŚWIADOMIE (#2002)
+    # ================================================================================================
+    # Referuje go jedyna reguła CZŁONKOWSKA w konfiguracji egzekwowanej (`t-alpha`, profil
+    # vertex-online-serving). `AND` wymaga OBU warunków, a `corp_network` jest nieuzbrojony — więc
+    # nieosiągalność dziedziczy się i ta reguła nie wpuszcza nikogo. Wariant defektu najłatwiejszy do
+    # przeoczenia: poziom nie ma ANI JEDNEGO własnego zakresu IP, więc wypada z każdego „przeglądu
+    # zakresów", a mimo to jest bezczynny.
+    #
+    # DLACZEGO NIE NAPRAWIAMY TEGO ZAKRESEM: patrz `corp_network` wyżej — w labie nie ma zakresu, który
+    # dałoby się wpisać uczciwie. DLACZEGO NIE ZAMIENIAMY WARUNKU SIECIOWEGO NA TOŻSAMOŚCIOWY: poziom
+    # autoryzujący samą tożsamością nie dokłada nic ponad `identities` reguły, a w scenariuszu, dla
+    # którego access level w ogóle istnieje (skradzione poświadczenie użyte z cudzej sieci), zdejmuje
+    # jedyną obronę. To byłoby OBEJŚCIE kontroli sieciowej, nie jej naprawa.
+    #
+    # ZOSTAJE WIĘC ZAPIS ŚWIADOMY I WYGASAJĄCY. Reguła jest dziś kontrolą bezczynną — dopuszczalną, bo
+    # `t-alpha` to pusty projekt testowy, a wersja bezczynna jest OSTRZEJSZA, nie luźniejsza (odmawia
+    # wszystkim). Data wymusza powrót do tematu zamiast zostawienia notatki na zawsze. Że sam MECHANIZM
+    # access levelu działa w obie strony, dowodzi kanarek niżej — osobnymi regułami, na żywo (DEC-19).
+    armed: false
+    unarmed_reason: "dziedziczy nieuzbrojony corp_network; regula t-alpha jest swiadomie bezczynna, mechanizm mierzy kanarek"
+    unarmed_accepted_until: "2026-11-12"
     combining_function: AND
     regions:
       - PL
@@ -84,6 +151,43 @@ access_levels:
   # --- tożsamości: konkretne grupy zamiast „ktokolwiek z właściwej sieci" -------------------------
   # Access level z `members` zawęża warunek do wskazanych tożsamości. Bez tego poziom mówi tylko „z tej
   # sieci", więc każdy, kto jest w VPN, spełnia go — także konto, które nie powinno dotykać tych danych.
+
+  # =================================================================================================
+  # KANAREK ACCESS LEVELU — para poziomów, którą MIERZY SIĘ ŚCIEŻKĘ POZYTYWNĄ (#2002, DEC-19)
+  # =================================================================================================
+  # PO CO. Odmowę granicy da się zaobserwować z dowolnego miejsca. Tego, że access level kogoś WPUSZCZA,
+  # nie widać nigdzie: audit-log zapisuje NARUSZENIA, nie wpuszczenia, a `describe` pokazuje treść,
+  # którą sami wysłaliśmy. Do tej pory nikt w tej organizacji nie zaobserwował, żeby access level
+  # cokolwiek przepuścił — a awaria tej połowy (zakres przestał pasować) nie wpuszcza obcych, tylko
+  # ODCINA WŁASNYCH, i to dopiero w dniu promocji.
+  #
+  # JAK. Te dwa poziomy różnią się DOKŁADNIE JEDNĄ rzeczą: kontem, które wymieniają. Reguły `canary-*`
+  # w policy.yaml różnią się dokładnie jedną rzeczą: który z nich jest ich źródłem. Sonda woła tą samą
+  # tożsamością (`sa-vpcsc-plan`, ta sama, którą chodzi `terraform plan`) dwie metody read-only na tym
+  # samym projekcie, w tej samej chwili, z tego samego runnera. Jedno wywołanie ma przejść, drugie
+  # dostać odmowę VPC-SC. Każda WSPÓLNA przyczyna — brak roli IAM, wyłączone API, zepsuty projekt,
+  # nieobecna reguła — daje ten sam wynik po obu stronach i nie potrafi wyprodukować rozjazdu.
+  #
+  # DLACZEGO `members`, A NIE ZAKRES IP. Bo to jedyny warunek, który runner CI umie spełnić w sposób
+  # deklarowalny z góry: jego adres rotuje, a pula dostawcy obejmuje cudze pipeline'y. Kanarek NIE
+  # zastępuje warunku sieciowego w regułach dywizji (to byłoby obejście kontroli) — mierzy MECHANIZM
+  # na własnych regułach, własną tożsamością platformy i na metodach opisujących konfigurację
+  # logowania, nie dane. Pełne uzasadnienie i odrzucone alternatywy: DEC-19.
+  - name: ci_probe_match
+    title: "Canary: identity the boundary probe actually uses"
+    armed: true
+    members:
+      - "serviceAccount:sa-vpcsc-plan@rwlab-vpcsc-adm-46bc.iam.gserviceaccount.com"
+
+  - name: ci_probe_mismatch
+    title: "Canary: a different, existing platform identity the probe never uses"
+    armed: true
+    # ACM waliduje ISTNIENIE tożsamości (`invalid or non-existent` odrzuca CAŁĄ zmianę), więc to nie może
+    # być konto zmyślone. Bierzemy konto apply: poziom jest osiągalny W ZASADZIE (ktoś MOŻE go spełnić),
+    # tylko nie przez sondę. To jest różnica między „warunek nie do spełnienia" a „warunek niespełniony
+    # przez to wywołanie" — i dzięki niej negatyw mierzy access level, a nie martwy zapis.
+    members:
+      - "serviceAccount:sa-vpcsc-apply@rwlab-vpcsc-adm-46bc.iam.gserviceaccount.com"
 
   # --- geografia: odrzucenie ruchu z regionów, w których nie działamy ----------------------------
   # Kody ISO 3166-1 alfa-2. To NIE jest zabezpieczenie kryptograficzne (VPN je omija), ale tanio ucina
