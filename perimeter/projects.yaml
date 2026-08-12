@@ -35,8 +35,11 @@ members:
     params:
       caller_identities:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
+      # KOMPOZYCJA zamiast samego `corp_network` (#1939): korpo-siec ORAZ region PL/DE. To ZAWEZENIE —
+      # poziom skladany dziedziczy warunek corp_network i doklada wlasny. Ten czlonek jest celem promocji
+      # do enforced, wiec swiadomie dostaje mocniejszy, nie slabszy warunek kontekstu.
       access_levels:
-      - corp_network
+      - corp_network_and_region
   exceptions: []
 - schema_version: 1
   division: lab
@@ -62,8 +65,14 @@ members:
     params:
       pipeline_identities:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
+      # POZIOM GEOGRAFICZNY (#1939) — jedyne miejsce w tej konfiguracji, w ktorym `regions` jest realnie
+      # REFEROWANY przez regule, a nie tylko istnieje w polityce. Swiadomy kompromis: sam `eu_only` jest
+      # SLABSZY niz `corp_network` (kazdy adres z DE/FR/NL go spelnia). Stoi tu, bo t-beta jest pustym
+      # projektem testowym, konfiguracja egzekwowana jest pusta, a bez referencji z reguly nie da sie
+      # zmierzyc, ze prymityw `regions` dziala end-to-end. W realnym wdrozeniu `eu_only` nalezy do
+      # KOMPOZYCJI (jak `corp_network_and_region`), nie stoi samodzielnie w regule.
       access_levels:
-      - corp_network
+      - eu_only
       training_identities:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
       data_source_projects:
