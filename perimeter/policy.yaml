@@ -131,6 +131,32 @@ onboarding:
   # 2026-09-12.
   #
   # Gdy wyjatek bedzie znowu potrzebny — ksztalt i wymogi opisuje docs/3-runbook-promocja-i-break-glass.md.
+  #
+  # ZNOWU JEST POTRZEBNY, I DOKLADNIE Z POWODU OPISANEGO WYZEJ: `t-alpha` wrocil do dry-run przez
+  # break-glass (#1943), wiec przestal byc czlonkiem „z potwierdzonym enforced" i obie bramki merytoryczne
+  # znow go dotycza. Obie sa dzis niespelnialne inaczej niz wyjatkiem — i to jest wlasnie ZMIERZONA cena
+  # break-glassu, nie usterka:
+  #   * dni w dry-run: `dry_run_since` = 2026-08-10, dzis 2026-08-12 → 2 z wymaganych 14;
+  #   * naruszenia w oknie: 628 wpisow dla tego czlonka w oknie 14 dni — w komplecie ODMOWY Z SAMEGO
+  #     POMIARU BLOKADY i z sondy break-glassu, czyli ruch, ktory sami wygenerowalismy przeciwko pustemu
+  #     projektowi testowemu. `violations_report` swiadomie nie filtruje po `dryRun` (odmowa egzekwowana
+  #     tego pola NIE MA), wiec licza sie takze odmowy sprzed democji.
+  # Wyjatek ma date waznosci 4 dni i znika, gdy tylko granica zacznie egzekwowac tego czlonka — wtedy
+  # `granica_juz_wlaczona` wylacza obie reguly i nie ma czego zwalniac (usuwany osobnym PR-em).
+  promotion_waivers:
+    - member: lab-rwlab-vpcsc-t-alpha
+      approved_by: mail@rafalwalas.com
+      expires: "2026-08-16"
+      accept_dry_run_days_below_minimum: true
+      accept_violations_up_to: 800
+      justification: >-
+        Przywrocenie stanu sprzed cwiczenia procedury break-glass (#1943) na pustym projekcie testowym
+        utworzonym wylacznie na pomiar blokady. Wszystkie 628 naruszen w oknie to odmowy wygenerowane
+        przez wlasne sondy kampanii (C1 #1941 i cwiczenie break-glassu), a nie ruch jakiegokolwiek
+        workloadu; projekt nie ma zadnych zasobow poza wlaczonymi API. Warunek dni w dry-run jest
+        niespelnialny z tego samego powodu, dla ktorego byl niespelnialny przy pierwszej promocji:
+        czlonek powstal pod pomiar, nie pod produkcje. Prog 800 zostawia zapas na sonde weryfikacyjna
+        po promocji i zatrzyma promocje, gdyby pojawil sie przeplyw spoza tego zbioru.
 
 # ZGODY SECURITY NA PROFILE WYPUSZCZAJĄCE DANE POZA GOOGLE CLOUD (DEC-23).
 #
