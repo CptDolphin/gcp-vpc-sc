@@ -137,6 +137,19 @@ onboarding:
         a ta zostala wykonana osobno i opisana w #1996. Data waznosci celowo za horyzontem naprawy #1997
         (bramka dowodu pyta o STAN enforced, nie o PRZEJSCIE, wiec po promocji odmowy czerwienilyby kazdy
         kolejny PR w repo); zdjecie tego wyjatku jest kryterium akceptacji #1997.
+    # Wyjatek TESTOWY, zalozony wylacznie po to, zeby warunki MERYTORYCZNE promocji byly spelnione i jedyna
+    # rzecza zatrzymujaca ten apply byla bramka wymagajaca czlowieka (DEC-17). Bez niego promocja odpadlaby
+    # na regule OPA i test nie mierzylby tego, co ma mierzyc.
+    - member: lab-rwlab-vpcsc-t-beta
+      accept_dry_run_days_below_minimum: true
+      accept_violations_up_to: 30
+      approved_by: mail@rafalwalas.com
+      expires: '2026-08-19'
+      justification: >-
+        Projekt pusty, bez ruchu poza naszymi wlasnymi przelotami; wszystkie naruszenia w oknie pochodza
+        od konta czlowieka prowadzacego pomiary i od raportu naruszen. Wyjatek istnieje na czas testu
+        bramki manualnej przed enforced i wygasa po tygodniu — promocja t-beta NIE jest celem samym
+        w sobie, tylko materialem dowodowym: konfiguracja egzekwowana wraca po pomiarze do stanu sprzed niego.
 
 # Budżet atrybutów: perimetr ma limit 6000 atrybutów NA KONFIGURACJĘ, liczony osobno dla enforced i dry-run
 # (docs: VPC SC quotas). Guard CI liczy zachowawczo i pada powyżej progu — próg, nie limit, żeby zapchanie
