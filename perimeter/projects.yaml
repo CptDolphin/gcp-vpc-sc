@@ -23,9 +23,12 @@ members:
   project_id: rwlab-vpcsc-t-alpha
   project_number: '930573188863'
   owner_group: lab@rafalwalas.com
-  change_ref: manual:drugi czlonek perimetru — projekt pusty, przeznaczony na pomiar
+  change_ref: 'manual:drugi czlonek perimetru — projekt pusty, przeznaczony na pomiar
     blokady (C1); ai-vertex zostaje w dry-run jako kontrola, ze promocja nie wciaga
-    pozostalych
+    pozostalych; #1939: access level corp_network -> corp_network_and_region. To ZAWEZENIE
+    — poziom skladany dziedziczy warunek corp_network i doklada wlasny (regions PL/DE),
+    a AND wymaga obu. Ten czlonek jest celem promocji do enforced, wiec swiadomie
+    dostaje mocniejszy warunek kontekstu'
   approved_by: mail@rafalwalas.com
   stage: dry-run
   dry_run_since: '2026-08-10'
@@ -35,9 +38,6 @@ members:
     params:
       caller_identities:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
-      # KOMPOZYCJA zamiast samego `corp_network` (#1939): korpo-siec ORAZ region PL/DE. To ZAWEZENIE —
-      # poziom skladany dziedziczy warunek corp_network i doklada wlasny. Ten czlonek jest celem promocji
-      # do enforced, wiec swiadomie dostaje mocniejszy, nie slabszy warunek kontekstu.
       access_levels:
       - corp_network_and_region
   exceptions: []
@@ -46,10 +46,15 @@ members:
   project_id: rwlab-vpcsc-t-beta
   project_number: '254311132993'
   owner_group: lab@rafalwalas.com
-  change_ref: manual:trzeci czlonek perimetru — nosnik jedynych regul EGRESS. Egress
+  change_ref: 'manual:trzeci czlonek perimetru — nosnik jedynych regul EGRESS. Egress
     ma zostac w dry-run, a etap reguly egress jest w tym rendererze etapem CZLONKA
     (egress_rules_enforced filtruje po m.stage), wiec nie moze wisiec na t-alpha,
-    ktory jest celem promocji do enforced
+    ktory jest celem promocji do enforced; #1939: access level corp_network -> eu_only,
+    zeby prymityw `regions` byl realnie REFEROWANY przez regule, a nie tylko istnial
+    w polityce. Swiadomy kompromis: sam eu_only jest SLABSZY niz corp_network (kazdy
+    adres z DE/FR/NL go spelnia). Dopuszczalne, bo t-beta jest pustym projektem testowym,
+    a konfiguracja egzekwowana jest pusta. W realnym wdrozeniu regions nalezy do KOMPOZYCJI,
+    nie stoi samo w regule'
   approved_by: mail@rafalwalas.com
   stage: dry-run
   dry_run_since: '2026-08-11'
@@ -65,12 +70,6 @@ members:
     params:
       pipeline_identities:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
-      # POZIOM GEOGRAFICZNY (#1939) — jedyne miejsce w tej konfiguracji, w ktorym `regions` jest realnie
-      # REFEROWANY przez regule, a nie tylko istnieje w polityce. Swiadomy kompromis: sam `eu_only` jest
-      # SLABSZY niz `corp_network` (kazdy adres z DE/FR/NL go spelnia). Stoi tu, bo t-beta jest pustym
-      # projektem testowym, konfiguracja egzekwowana jest pusta, a bez referencji z reguly nie da sie
-      # zmierzyc, ze prymityw `regions` dziala end-to-end. W realnym wdrozeniu `eu_only` nalezy do
-      # KOMPOZYCJI (jak `corp_network_and_region`), nie stoi samodzielnie w regule.
       access_levels:
       - eu_only
       training_identities:
