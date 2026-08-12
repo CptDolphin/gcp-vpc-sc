@@ -98,3 +98,9 @@ members:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
       access_levels:
       - corp_network
+  - name: corp-user-console-access
+    params:
+      user_groups:
+      - group:lab@rafalwalas.com
+      access_levels:
+      - corp_network
