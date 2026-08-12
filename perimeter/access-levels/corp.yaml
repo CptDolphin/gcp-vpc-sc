@@ -48,6 +48,15 @@ access_levels:
   # danych produkcyjnych. Zamiast duplikować warunki w dwóch miejscach, składamy istniejące poziomy.
   # UWAGA na kolejność: poziom wskazywany w `required_access_levels` musi istnieć — renderer sortuje
   # zależności, ale cykl (A wymaga B, B wymaga A) wykryje dopiero API.
+  #
+  # SPROSTOWANIE (2026-08-12, #1939): do tego dnia stało tu, że kompozycja BEZ własnego warunku jest
+  # odrzucana przez API jako `AccessLevel definition has a trivial condition`. NIEPRAWDA. Ten sam poziom
+  # wysłany do ACM z pominięciem renderera:
+  #     POST …/accessLevels  {"basic":{"conditions":[{"requiredAccessLevels":["…/corp_network"]}]}}
+  # POWSTAJE (odczyt z API potwierdza jeden warunek `requiredAccessLevels`). „Trywialny warunek" pochodził
+  # od NAS: `terraform/perimeter.tf` renderował blok `conditions` bezwarunkowo, więc dokładał do kompozycji
+  # PUSTY warunek. Poprawione tam, więc wariant niżej działa dziś tak, jak wygląda — czeka już tylko na
+  # licencję BeyondCorp dla `corp_managed_device`.
   # - name: corp_network_and_device
   #   title: "Corporate network AND managed device"
   #   combining_function: AND
@@ -60,10 +69,11 @@ access_levels:
   # od pierwszego dnia. Po włączeniu licencji BeyondCorp podmień drugi składnik na corp_managed_device.
   - name: corp_network_and_region
     title: "Corporate network AND allowed region"
-    # UWAGA: poziom złożony WYŁĄCZNIE z `required_access_levels` jest odrzucany przez API jako
-    # `Error 400: AccessLevel definition has a trivial condition` (zmierzone, Issue #1904). Kompozycja musi
-    # nieść też własny warunek — tutaj `regions`. To ogranicza wzorzec „poskładam z gotowych klocków":
-    # zawsze potrzebny jest co najmniej jeden warunek bezpośrednio w tym poziomie.
+    # `combining_function: AND` znaczy: OBA warunki muszą być spełnione — region PL/DE ORAZ korpo-sieć.
+    # Przestawienie tego jednego słowa na `OR` daje „region PL/DE ALBO korpo-sieć", czyli wpuszcza dowolny
+    # adres z regionu; API przyjmuje taką zmianę bez ostrzeżenia (ZMIERZONE 2026-08-12, #1939: odpowiedź 200
+    # z `combiningFunction: OR`). Dlatego OR wymaga pola `or_reason` — schemat, reguła `vpcsc.onboarding`
+    # i `precondition` renderera pilnują tego niezależnie od siebie (DEC-15).
     combining_function: AND
     regions:
       - PL
