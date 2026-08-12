@@ -116,30 +116,21 @@ onboarding:
   # uruchomienie z lista promowanych (DEC-17). Obnizenie progow nizej NIE otwiera tamtej bramki.
   dry_run_min_days: 14 # minimum od dry_run_since do promocji
   clean_window_days: 7 # ostatnie N dni muszą być bez naruszeń
-  promotion_waivers:
-    # WYJATEK NA `lab-rwlab-vpcsc-t-alpha` ZDJETY 2026-08-12 razem z DEC-18 — i to jest DOWOD, ze naprawa
-    # dziala, a nie sprzatanie. Istnial wylacznie po to, zeby bramka pytajaca o STAN enforced przestala
-    # czerwienic KAZDY pull request w tym repo odmowami, po ktore te promocje robiono (18 wpisow w oknie
-    # + "promocja po 2 dniach dry-run"). Odkad bramka pyta o PRZEJSCIE, a stanem odniesienia jest kontrakt
-    # z ostatniego apply, czlonek z potwierdzonym `stage: enforced` nie jest juz przedmiotem tego pytania —
-    # wiec nie ma czego zwalniac. ZMIERZONE po zdjeciu: bramki 32/32 zielone bez tego wpisu.
-    #
-    # Gdyby ten wyjatek zostal, maskowalby rzecz odwrotna niz obiecuje: kolejna promocja t-alpha (po
-    # ewentualnym cofnieciu do dry-run) przeszlaby BEZ dowodu az do 2026-09-12.
-
-    # Wyjatek TESTOWY, zalozony wylacznie po to, zeby warunki MERYTORYCZNE promocji byly spelnione i jedyna
-    # rzecza zatrzymujaca ten apply byla bramka wymagajaca czlowieka (DEC-17). Bez niego promocja odpadlaby
-    # na regule OPA i test nie mierzylby tego, co ma mierzyc.
-    - member: lab-rwlab-vpcsc-t-beta
-      accept_dry_run_days_below_minimum: true
-      accept_violations_up_to: 30
-      approved_by: mail@rafalwalas.com
-      expires: '2026-08-19'
-      justification: >-
-        Projekt pusty, bez ruchu poza naszymi wlasnymi przelotami; wszystkie naruszenia w oknie pochodza
-        od konta czlowieka prowadzacego pomiary i od raportu naruszen. Wyjatek istnieje na czas testu
-        bramki manualnej przed enforced i wygasa po tygodniu — promocja t-beta NIE jest celem samym
-        w sobie, tylko materialem dowodowym: konfiguracja egzekwowana wraca po pomiarze do stanu sprzed niego.
+  # WYJATKOW NIE MA — I TO JEST WYNIK POMIARU, NIE PUSTE MIEJSCE PO SPRZATANIU.
+  #
+  # Do 2026-08-12 stal tu wyjatek na `lab-rwlab-vpcsc-t-alpha` (accept_violations_up_to: 60, expires
+  # 2026-09-12). Nie pokrywal ryzyka promocji — trzymal CALE REPO. Bramka pytala o STAN `enforced`, wiec po
+  # pierwszej promocji odmowy, po ktore te promocje robiono, czerwienily kazdy kolejny pull request
+  # (zmierzone: 18 wpisow w oknie + "promocja po 2 dniach dry-run", na wnioskach niezwiazanych z promocja).
+  #
+  # Odkad bramka pyta o PRZEJSCIE, a stanem odniesienia jest kontrakt z ostatniego apply (DEC-18), czlonek
+  # z potwierdzonym `stage: enforced` nie jest juz przedmiotem tego pytania — wiec nie ma czego zwalniac.
+  # ZMIERZONE po zdjeciu, na tym samym dokumencie wejsciowym: 32/32 zielone; ta sama tresc na regule sprzed
+  # naprawy dawala 2 odrzucenia. Zostawiony "na wszelki wypadek" wyjatek maskowalby rzecz odwrotna niz
+  # obiecuje: kolejna promocja t-alpha (po ewentualnym cofnieciu do dry-run) przeszlaby BEZ dowodu az do
+  # 2026-09-12.
+  #
+  # Gdy wyjatek bedzie znowu potrzebny — ksztalt i wymogi opisuje docs/3-runbook-promocja-i-break-glass.md.
 
 # Budżet atrybutów: perimetr ma limit 6000 atrybutów NA KONFIGURACJĘ, liczony osobno dla enforced i dry-run
 # (docs: VPC SC quotas). Guard CI liczy zachowawczo i pada powyżej progu — próg, nie limit, żeby zapchanie
