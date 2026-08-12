@@ -111,6 +111,7 @@ Wszystko to robi `tools/bootstrap_github.sh` — i, co ważniejsze, **czyta wyni
 ```bash
 gh api repos/<ORG>/<REPO>/environments/perimeter-apply --jq '.protection_rules'
 gh api repos/<ORG>/<REPO>/environments/perimeter-apply/deployment-branch-policies --jq '.branch_policies[].name'
+gh api repos/<ORG>/<REPO>/branches/main/protection --jq '.required_status_checks.contexts'
 ```
 
 Pierwsza komenda ma pokazać `required_reviewers`, druga — samą gałąź domyślną. Rozróżnij dwa braki, bo
@@ -202,3 +203,36 @@ opisany w DEC-6, bo każdy zespół pisałby do własnego obiektu.
 
 Wytyczna brzmi jednak **jeden perimeter** (DEC-1), więc ta ścieżka jest świadomie zamknięta, a jej
 konsekwencją jest cała reszta konstrukcji: jeden mutator, trzy kanały wejścia, kontrakt zamiast dostępu.
+
+## Uruchomienie z laptopa (ścieżka testowa)
+
+Pipeline uwierzytelnia się przez WIF i tam nic dodatkowego nie trzeba. Człowiek uruchamiający `plan`/`apply`
+lokalnie — czyli ścieżka scoped-policy z [`2-uprawnienia-i-wif.md`](2-uprawnienia-i-wif.md) §4a — musi wskazać
+projekt rozliczeniowy, inaczej API Access Context Managera odbija:
+
+```
+Error 403: ... The accesscontextmanager.googleapis.com API requires a quota project, which is not set by default.
+```
+
+Samo `gcloud auth application-default set-quota-project` **nie wystarcza** — provider `google` podnosi to
+dopiero z `user_project_override`:
+
+```bash
+export USER_PROJECT_OVERRIDE=true
+export GOOGLE_BILLING_PROJECT=<projekt-z-wlaczonym-accesscontextmanager>
+```
+
+Ten sam projekt musi mieć włączone `accesscontextmanager.googleapis.com` i podpięte konto rozliczeniowe.
+
+## Pierwszy apply uruchom DWA RAZY
+
+`google_logging_metric` powstaje od razu, ale do Cloud Monitoring propaguje się **do 10 minut**, więc alerty
+oparte na tych metrykach padają przy pierwszym przebiegu:
+
+```
+Error 404: Cannot find metric(s) that match type = "logging.googleapis.com/user/vpcsc/violations_enforced".
+If a metric was created recently, it could take up to 10 minutes to become available.
+```
+
+To propagacja po stronie API — `depends_on` jej nie rozwiązuje. Drugi apply przechodzi. Sekcja `monitoring`
+jest opcjonalna, więc alternatywą jest pominięcie jej przy bootstrapie i dołożenie osobnym PR-em.
