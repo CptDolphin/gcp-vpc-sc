@@ -110,6 +110,10 @@ services_without_method_selectors:
 # Parametry dwustopniowego onboardingu (DEC-4). Zmiana tych wartości = zmiana reżimu bezpieczeństwa
 # dla wszystkich dywizji, dlatego siedzą w baseline, a nie w pliku członka.
 onboarding:
+  # Te dwa progi sa warunkiem MERYTORYCZNYM promocji i sprawdza je automat (reguly OPA).
+  # Warunkiem CZASU jest co innego i nie stoi w tym pliku: apply, ktory zaczalby egzekwowac
+  # granice wobec czlonka bedacego dzis w dry-run, zatrzymuje sie i czeka na reczne
+  # uruchomienie z lista promowanych (DEC-17). Obnizenie progow nizej NIE otwiera tamtej bramki.
   dry_run_min_days: 14 # minimum od dry_run_since do promocji
   clean_window_days: 7 # ostatnie N dni muszą być bez naruszeń
   promotion_waivers:
