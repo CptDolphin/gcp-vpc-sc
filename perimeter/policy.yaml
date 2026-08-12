@@ -116,27 +116,21 @@ onboarding:
   # uruchomienie z lista promowanych (DEC-17). Obnizenie progow nizej NIE otwiera tamtej bramki.
   dry_run_min_days: 14 # minimum od dry_run_since do promocji
   clean_window_days: 7 # ostatnie N dni muszą być bez naruszeń
-  promotion_waivers:
-    # Pierwsza promocja w tym labie. Wyjątek jest per członek, wygasa sam i jest widoczny w diffie —
-    # świadomie ZAMIAST obniżenia `dry_run_min_days`, które poluzowałoby reżim wszystkim dywizjom naraz.
-    - member: lab-rwlab-vpcsc-t-alpha
-      accept_dry_run_days_below_minimum: true
-      accept_violations_up_to: 60
-      approved_by: mail@rafalwalas.com
-      expires: '2026-09-12'
-      justification: >-
-        Projekt pusty, zalozony wylacznie na pomiar blokady (C1/#1941) — nie ma w nim zadnego ruchu poza
-        naszymi wlasnymi sondami, wiec okno 14 dni nie zaobserwuje niczego, czego nie znamy. Okno obserwacji
-        jest przy tym FAKTYCZNIE krotsze niz deklarowane: sink zaczal dostarczac 2026-08-11T09:21 (#1969),
-        wiec dowod obejmuje ~20 godzin, nie 7 dni. Wszystkie naruszenia pochodza od konta czlowieka
-        prowadzacego pomiary (storage.buckets.list, ListLogEntries, ListLogMetrics, ListAlertPolicies)
-        i po promocji MAJA zostac odmowione — to jest cel, nie awaria. ZERO naruszen od kont maszynerii
-        (sa-vpcsc-plan/apply/scanner) od czasu kolapsu baseline do resources=["*"] 2026-08-11T08:13 (#1980),
-        mimo kilku przebiegow plan/apply — wiec promocja nie odetnie wlasnego CI. Prog 60 daje zapas na
-        kolejne przeloty sondy, bo licznik rosnie od samego mierzenia; nie jest kontrola zrodla naruszen,
-        a ta zostala wykonana osobno i opisana w #1996. Data waznosci celowo za horyzontem naprawy #1997
-        (bramka dowodu pyta o STAN enforced, nie o PRZEJSCIE, wiec po promocji odmowy czerwienilyby kazdy
-        kolejny PR w repo); zdjecie tego wyjatku jest kryterium akceptacji #1997.
+  # WYJATKOW NIE MA — I TO JEST WYNIK POMIARU, NIE PUSTE MIEJSCE PO SPRZATANIU.
+  #
+  # Do 2026-08-12 stal tu wyjatek na `lab-rwlab-vpcsc-t-alpha` (accept_violations_up_to: 60, expires
+  # 2026-09-12). Nie pokrywal ryzyka promocji — trzymal CALE REPO. Bramka pytala o STAN `enforced`, wiec po
+  # pierwszej promocji odmowy, po ktore te promocje robiono, czerwienily kazdy kolejny pull request
+  # (zmierzone: 18 wpisow w oknie + "promocja po 2 dniach dry-run", na wnioskach niezwiazanych z promocja).
+  #
+  # Odkad bramka pyta o PRZEJSCIE, a stanem odniesienia jest kontrakt z ostatniego apply (DEC-18), czlonek
+  # z potwierdzonym `stage: enforced` nie jest juz przedmiotem tego pytania — wiec nie ma czego zwalniac.
+  # ZMIERZONE po zdjeciu, na tym samym dokumencie wejsciowym: 32/32 zielone; ta sama tresc na regule sprzed
+  # naprawy dawala 2 odrzucenia. Zostawiony "na wszelki wypadek" wyjatek maskowalby rzecz odwrotna niz
+  # obiecuje: kolejna promocja t-alpha (po ewentualnym cofnieciu do dry-run) przeszlaby BEZ dowodu az do
+  # 2026-09-12.
+  #
+  # Gdy wyjatek bedzie znowu potrzebny — ksztalt i wymogi opisuje docs/3-runbook-promocja-i-break-glass.md.
 
 # Budżet atrybutów: perimetr ma limit 6000 atrybutów NA KONFIGURACJĘ, liczony osobno dla enforced i dry-run
 # (docs: VPC SC quotas). Guard CI liczy zachowawczo i pada powyżej progu — próg, nie limit, żeby zapchanie
