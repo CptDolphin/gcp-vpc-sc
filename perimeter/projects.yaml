@@ -92,9 +92,9 @@ members:
   dry_run_since: '2026-08-12'
   review_by: '2027-02-08'
   profiles:
-  - name: vertex-online-serving
+  - name: bq-omni-external-read
     params:
-      caller_identities:
+      query_identities:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
-      access_levels:
-      - corp_network
+      external_resources:
+      - s3://rwlab-dowod-2009-bez-zgody
