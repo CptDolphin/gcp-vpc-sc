@@ -1,6 +1,6 @@
-# Decyzje, na których stoi ten starter (DEC-1…DEC-18)
+# Decyzje, na których stoi ten starter (DEC-1…DEC-20)
 
-Osiemnaście rozstrzygnięć, które określają kształt repozytorium. Kod odsyła tutaj skrótem `DEC-1`…`DEC-18` — jeśli komentarz
+Dwadzieścia rozstrzygnięć, które określają kształt repozytorium. Kod odsyła tutaj skrótem `DEC-1`…`DEC-20` — jeśli komentarz
 w pliku mówi „(DEC-4)", to znaczy: „powód tej linijki jest opisany w DEC-4, nie zmieniaj jej bez przeczytania".
 
 Każda pozycja ma tę samą strukturę: **decyzja** · **dlaczego** · **co odrzucono i dlaczego**. Odrzucone warianty są
@@ -709,7 +709,7 @@ po stronie Google. Alerty z metryk (`alerts.tf`) — nie: zapis idzie z GitHuba,
 z nich zamilkną, a czwarty (`apply`) ODPALI warunkiem o braku danych, i będzie to prawda, bo w tym samym
 momencie apply też nie zadziała (stan leży w tym samym projekcie). **Ryzyko szczątkowe nazwane wprost:**
 skasowanie projektu monitoringu albo wyłączenie mu billingu nie odpala niczego. Zamknięcie tej luki wymaga
-obserwatora poza organizacją i świadomie nie wchodzi tutaj.
+obserwatora poza organizacją — i jest przedmiotem osobnej decyzji, **DEC-14**.
 
 **Odrzucone.**
 - *Nasłuch na `workflow_run` z `conclusion: failure` (GitHub → webhook → alert).* Najprostsze i najczęściej
@@ -736,8 +736,78 @@ obserwatora poza organizacją i świadomie nie wchodzi tutaj.
 
 ---
 
-<!-- DEC-14 (dead-man's-switch poza organizacja) jest w starterze i wjedzie do tego repo
-     osobnym syncem — numery pochodza ze startera, wiec nie przenumerowujemy tego wpisu. -->
+## DEC-14 — Ostatnią warstwą obserwacji jest dead-man's-switch POZA tą organizacją, a jego poświadczenie mieszka w repozytorium perimetru
+
+**Decyzja.** Job `publish` w `watch.yml` wysyła po udanej publikacji metryk jeden `GET` na URL checka
+u zewnętrznego dostawcy dead-man's-switch. Dostawca alarmuje własnym kanałem, gdy sygnał ustanie. URL to
+**sekret repozytorium** `DMS_PING_URL` — poziom repozytorium, nie environment — podawany **wyłącznie**
+jobowi `publish`. Okno ciszy u dostawcy jest związane z `watchdog_absent_seconds` (period = kadencja
+`watch.yml`, grace = 2× kadencja). Brak sekretu nie wywraca przebiegu, ale melduje się adnotacją
+i wierszem w podsumowaniu. Bramka `heartbeat DMS we właściwym jobie` w `validate.yml` pilnuje konstrukcji.
+
+**Dlaczego w ogóle piąta warstwa, skoro DEC-13 ma warunek na brak danych.** Bo warunek o BRAKU danych też
+jest ewaluowany przez silnik, który stoi **w tym samym projekcie** co stan Terraform, pula WIF i buckety
+kontraktów. Cztery polityki alertów odpowiadają na pytanie „czy maszyneria działa"; żadna nie odpowiada na
+pytanie „czy projekt, w którym te pytania są zadawane, jeszcze istnieje". Skasowanie projektu albo
+wyłączenie mu billingu nie odpala niczego — nie ma czego ewaluować. Zostaje cisza nieodróżnialna od
+zdrowia, i to na granicy bezpieczeństwa: przez ten czas review, `git revert` i raport zgodności mówią
+o konfiguracji, o której nikt nie wie, czy jest w chmurze. Obserwator, który umiera razem z obserwowanym,
+nie jest obserwatorem — jest jego częścią.
+
+**Dlaczego ping za publikacją, a nie na starcie joba.** Ma znaczyć „cały łańcuch żyje", nie „runner
+wstał". Wysłany na końcu dowodzi po kolei: GitHub odpalił workflow → `measure` odczytał stan Terraform
+z bucketa w projekcie monitoringu → dostawca tożsamości wydał token → `timeSeries.create` przeszedł.
+Pęknięte którekolwiek ogniwo = brak pingu = obserwator odzywa się sam. Ping wysyłany wcześniej meldowałby
+zdrowie martwej maszynerii, czyli robiłby dokładną odwrotność tego, po co warstwa istnieje.
+
+**Dlaczego cisza jest jedynym sygnałem — bez pingu `/fail`.** Kolizja blokady stanu z trwającym `apply`
+wywraca `measure` CELOWO i jest zdarzeniem znanym, tolerowanym i samonaprawialnym. Ping porażki alarmowałby
+na nim natychmiast, czyli nauczyłby dyżurnego ignorować kanał, który ma odezwać się raz na nigdy. Ceną jest
+związanie okna: musi tolerować dwa pominięte przebiegi, stąd grace = 2× kadencja i ta sama liczba co
+`watchdog_absent_seconds`. Trzy liczby (cron, okno u dostawcy, próg w `alerting.yaml`) opisują JEDNĄ
+decyzję i zmieniają się razem.
+
+**Dlaczego sekret w repozytorium, a nie w magazynie sekretów w chmurze.** Konsumentem jest runner GitHuba.
+Każde ogniwo pośrednie — magazyn w chmurze, klaster, pośrednik — dokłada rzecz, która może paść sama
+z siebie i wyprodukować alarm o granicy wtedy, gdy granica ma się dobrze. Gorzej: magazyn **wewnątrz tej
+samej organizacji** znika razem z projektem, czyli w dokładnie tym scenariuszu, dla którego warstwa
+powstała. Poziom repozytorium, a nie environment, bo `watch` nie używa żadnego environment, a environment
+z wymaganym recenzentem zatrzymałby heartbeat na review — dead-man's-switch czekający na zatwierdzenie
+melduje śmierć, której nie ma.
+
+**Dlaczego sekret NIE trafia do joba `measure`.** URL pingu jest poświadczeniem: kto go ma, ten potrafi
+UCISZYĆ dead-man's-switch. `measure` chodzi na koncie `plan`, impersonowalnym z każdego pull requesta —
+sekret podany tam pozwoliłby autorowi dowolnego PR-a podtrzymywać heartbeat przy martwej maszynerii. To ta
+sama granica, dla której `watch.yml` w ogóle ma dwa joby (DEC-13), więc łamiąc ją tutaj, unieważnia się ją
+i tam. Dlatego pilnuje jej bramka czytająca zparsowany YAML, a nie komentarz.
+
+**Brak sekretu = degradacja bezpieczna, ale WIDOCZNA.** Przebieg nie pada — metryki są zapisane, cztery
+alerty działają. Ale cicho nieuzbrojony dead-man's-switch to kontrola obecna w konfiguracji i nieosiągalna
+w działaniu, czyli spokój wzięty z niczego. Stąd adnotacja i wiersz w podsumowaniu zamiast `echo` ginącego
+w logu. Kolejność uzbrajania też jest samosprawdzająca: check założony PRZED wpięciem sekretu zaczyna
+odliczać od razu, więc uzbrojenie porzucone w połowie zgłasza się samo.
+
+**Odrzucone.**
+- *Piąty alert w Cloud Monitoring — cokolwiek by mierzył.* Każda polityka w tym projekcie dzieli los
+  projektu. Nie da się zbudować wewnątrz obiektu kontroli nad jego zniknięciem.
+- *Alert w DRUGIM projekcie tej samej organizacji.* Tańszy i pozornie wystarczający, ale nie pokrywa
+  scenariuszy organizacyjnych (zawieszone konto rozliczeniowe, wyłączony billing na poziomie konta,
+  utrata dostępu do organizacji), a te są dokładnie tą klasą zdarzeń, której nie widać od środka.
+- *Nasłuch po stronie dostawcy na „workflow failed" zamiast heartbeatu.* Ta sama wada co w DEC-13, tylko
+  przeniesiona na zewnątrz: przebieg, który się nie odpalił, nie generuje zdarzenia. Heartbeat mierzy stan.
+- *Ping `/start` i `/fail` obok pingu sukcesu.* Daje ładniejszy wykres czasu trwania i alarmuje szybciej —
+  na zdarzeniach, które są tolerowane z założenia. Kanał, który odzywa się przy normalnej pracy, przestaje
+  być kanałem ostatniej instancji.
+- *Ping z joba `measure`, „bo i tak zawsze się wykonuje".* Właśnie dlatego nie: zawsze się wykonuje, więc
+  meldowałby zdrowie także wtedy, gdy publikacja metryk pada. Plus sekret w jobie impersonowalnym z PR-a.
+- *Heartbeat z osobnego workflowa na tym samym cronie.* Wysyłałby ping niezależnie od tego, czy `watch`
+  cokolwiek zmierzył — czyli mierzyłby dostępność GitHub Actions, a nie żywotność maszynerii granicy.
+
+---
+
+---
+
+---
 
 ## DEC-15 — `combining_function: OR` wymaga napisanego powodu; pusty warunek nie jest już doklejany
 
@@ -777,6 +847,113 @@ warunków w ogóle nie ma żadnej bariery po stronie API, dlatego pojawia się `
 - *Ostrzeżenie zamiast odmowy przy `OR` na jednym warunku.* Taki zapis nic nie robi, więc kusi, żeby go
   tolerować. Ożywa jednak w dniu, w którym ktoś dołoży `required_access_levels`: osłabienie wchodzi wtedy
   bez żadnego diffu przy `combining_function`, bo to słowo stało w pliku od dawna.
+
+---
+
+## DEC-16 — Bramka należy do MUTATORA, nie do zdarzenia `pull_request`
+
+**Decyzja.** Wszystkie bramki treści (schematy JSON, reguły `vpcsc.onboarding` wraz z
+`control_plane_projects`, testy jednostkowe reguł, budżet atrybutów, guardy repozytorium) oraz obie bramki
+żywe (lista usług wspieranych przez VPC-SC, właściciel bucketa stanu) mają **jedną definicję** — akcje
+złożone `.github/actions/bramki-tresci` i `.github/actions/bramki-zywe` — wołaną przez **oba tory**:
+`validate.yml`/`plan.yml` na pull requeście oraz `apply.yml` na ścieżce mutatora. W `apply.yml` podział
+idzie po TOŻSAMOŚCI: bramki treści w osobnym jobie `bramki` (zero poświadczeń, brak `environment`, job
+applikujący zależy od niego przez `needs:`), bramki żywe w jobie applikującym, **tożsamością `apply`**.
+
+**Problem, który to zamyka.** `apply.yml` wyzwala się na push do gałęzi domyślnej i wykonywał: `plan` →
+reguły `vpcsc.perimeter` na plan-JSON → `apply`. **Ani jednej bramki treści.** Gałąź domyślna repozytorium
+perimetru bywa bez ochrony — na darmowym planie dla repo prywatnego API odpowiada `403 Upgrade to GitHub
+Pro`, więc jest to odstępstwo zapisane, nie przeoczone (patrz niezmiennik o ochronie gałęzi w `AGENTS.md`).
+Commit wypchnięty prosto na tę gałąź omijał więc **cały** tor `pull_request` i szedł do apply.
+
+**Zmierzone.** Bramka `control_plane_projects` — jedyna kontrola przed awarią, której `git revert` NIE
+cofa (konto apply odcięte od własnego stanu, wyjście wymaga człowieka z uprawnieniami org-level na żywej
+polityce) — istniała **wyłącznie** w `validate.yml`. `terraform plan` przepuszczał tę samą zmianę na
+zielono, bo reguły `vpcsc.perimeter` nie wiedzą nic o płaszczyźnie sterowania: opisują kształt reguł
+ingress/egress, nie to, czyj projekt wchodzi do granicy. Kontrola stojąca **obok** ścieżki, którą realnie
+zmienia się granicę, jest kontrolą celującą w pustkę.
+
+**Dlaczego jedna definicja, a nie skopiowane kroki.** Kopia rozjeżdża się przy pierwszej zmianie —
+i wtedy wraca dokładnie ten defekt, tylko ciszej, bo „te same bramki" przestają być te same, a nic tego
+nie mierzy. Nowa deklaracja (`perimeter/alerting.yaml` przyszła tydzień po poprzedniej) dopisana do
+jednego z dwóch zestawów odtworzyłaby lukę dzień po jej zasypaniu. Selftest mierzy **zawieranie zbiorów**:
+każda akcja bramkowa wołana przez tor pull requesta musi być wołana także przez mutatora, z premisą
+odrzucającą zbiór pusty.
+
+**Dlaczego akcja złożona, a nie `workflow_call`.** Reusable workflow to osobny JOB: własny runner, własny
+checkout, własna wymiana tokenu WIF i własna przestrzeń robocza. Kroki bramek muszą widzieć drzewo
+wywołującego (`declarations.json`, pobrany artefakt dowodu naruszeń), a na ścieżce apply — wykonać się
+przed wejściem w environment. Akcja złożona działa **wewnątrz** joba wywołującego: dzieli katalog roboczy
+i nie dokłada ani jednego uwierzytelnienia.
+
+**Dlaczego bramki są osobnym JOBEM, a nie krokami przed `terraform apply`.** Job `apply` deklaruje
+`environment: perimeter-apply` z polityką gałęzi. Na gałęzi spoza tej polityki GitHub odrzuca **cały job**,
+zanim ruszy pierwszy krok — bramki umieszczone tam byłyby więc **nietestowalne inaczej niż na żywej
+granicy**. Osobny job bez `environment` uruchamia się `workflow_dispatch`-em z gałęzi testowej, więc da się
+ZOBACZYĆ, że odrzuca, zamiast twierdzić, że odrzuci. Dodatkowo czerwona bramka zatrzymuje przebieg przed
+wymianą tokenu na tożsamość zapisującą, a `needs:` jest twarde: job applikujący nie startuje wcale.
+
+**Dlaczego bramki żywe pytają kontem `apply`, mimo że to KOSZTUJE.** Bramka żywa opisuje stan świata,
+który za moment zostanie zmieniony. Zapytana kontem `plan` opisywałaby świat widziany przez KOGOŚ INNEGO
+niż mutator, a różnica między tymi dwoma widokami wyszłaby dopiero jako czerwony apply — czyli tam, gdzie
+nie ma już czego sprawdzać. `terraform apply` zaczyna od REFRESHU, więc jest nadzbiorem planu: konto
+`apply` musi umieć przeczytać wszystko, czym zarządza, i to samo dotyczy teraz obu bramek żywych.
+
+Cena jest realna i nazywamy ją wprost: **uprawnienie, którego kontu `apply` zabraknie, nie osłabia granicy
+— ZATRZYMUJE jedyną drogę wdrożenia.** Ten tryb awarii już tu wystąpił (rola org-wide niosła uprawnienie,
+bez którego refresh monitoringu padał `403` przy KAŻDEJ zmianie). Dlatego warunek konieczny jest sprawdzony
+w kodzie, nie założony: `iam-bootstrap/main.tf` nadaje `roles/storage.legacyBucketReader` na buckecie stanu
+**obu** kontom tym samym `for_each` — a to jest dokładnie `storage.buckets.get`, z którego żyje
+`control_plane_check.py --live`. Odwrotna strona tej zależności jest zdrowa: zdjęcie tego grantu zatrzymuje
+apply niezależnie od bramki, bo apply przestaje widzieć własny stan.
+
+**Ryzyko szczątkowe tej decyzji, zmierzone i nazwane.** Drugiej bramki żywej
+(`gcloud access-context-manager supported-services list`) NIE dało się przed wdrożeniem sprawdzić kontem
+`apply` inaczej niż uruchomieniem na gałęzi domyślnej: wiązanie WIF wydaje tę tożsamość WYŁĄCZNIE tokenowi
+z roszczeniem `attribute.environment/perimeter-apply`, a polityka gałęzi tego environment dopuszcza samą
+gałąź domyślną. Nie istnieje więc gałąź testowa, na której dałoby się to zmierzyć — pierwszy przebieg na
+gałęzi domyślnej JEST pomiarem. Konsekwencja przyjęta świadomie: pierwszy apply po tej zmianie ogląda się
+na żywo, a wycofanie to jedno cofnięcie kroku.
+
+**Dowód naruszeń idzie tą samą drogą — i to nie jest detal.** `promotion_gate` jest fail-closed: bez mapy
+`violations_last_window` odrzuca KAŻDEGO członka `enforced`. Gdyby artefakt raportu pobierał wyłącznie tor
+pull requesta, bramki przed apply byłyby OSTRZEJSZE niż te, które przepuściły review — zmergowana promocja
+z kompletnym dowodem nie zostałaby zastosowana **nigdy**, a przebieg wyglądałby na „bramka zadziałała".
+Dlatego `apply.yml` ma `actions: read` i pobiera ten sam artefakt.
+
+**Czego to NIE zastępuje.** Ochrona gałęzi domyślnej zostaje prerekwizytem wdrożenia. Bramki na ścieżce
+mutatora sprawiają, że zła treść nie zostanie **zastosowana**; ochrona gałęzi sprawia, że w ogóle nie
+**wyląduje** na gałęzi domyślnej — czyli że historia repozytorium nadal opisuje to, co przeszło review.
+To dwie różne własności i jedna nie kupuje drugiej.
+
+**Ryzyko szczątkowe nazwane wprost.** Wyzwalacz `apply.yml` obejmuje `perimeter/**` i `terraform/**`
+(i musi być zgodny z tym, co obserwuje `watch.yml` — patrz DEC-13). Push zmieniający SAME reguły
+(`policy/**`) nie uruchamia więc apply w tej samej chwili; rozbrojenie reguły wychodzi dopiero przy
+NASTĘPNYM apply, gdzie łapią je testy jednostkowe `conftest verify` w tym samym jobie bramek. Poszerzenie
+wyzwalacza oznaczałoby apply przy zmianie, która nie zmienia granicy — koszt bez zysku, bo okno zamyka
+się przy pierwszej realnej zmianie.
+
+**Koszt.** Jeden dodatkowy job na apply: ~60-90 s (instalacja narzędzi, wymiana tokenu, dwa wywołania
+API). Płacony raz na apply, nie raz na pull request.
+
+**Odrzucone.**
+- *Włączyć ochronę gałęzi zamiast przenosić bramki.* Funkcja płatna na repo prywatnym (`403 Upgrade to
+  GitHub Pro`), a upublicznienie repozytorium nie jest obejściem — jego treść to mapa dostępów. Nawet
+  z ochroną gałęzi rozwiązaniem właściwym jest bramka na mutatorze: ochrona gałęzi wymusza review, a nie
+  wykonanie kontroli.
+- *Skopiować kroki z `validate.yml` do `apply.yml`.* Najkrótszy diff, najkrótsza żywotność: pierwsza
+  bramka dopisana po jednej stronie odtwarza lukę, a zielony przebieg wygląda identycznie.
+- *Reusable workflow (`workflow_call`).* Osobna przestrzeń robocza i osobne uwierzytelnienie dla kroków,
+  które muszą czytać drzewo wywołującego; wymagałby przenoszenia artefaktów między jobami tylko po to,
+  żeby bramki zobaczyły to, co i tak leży obok.
+- *Bramki jako kroki w jobie `apply`.* Nietestowalne poza gałęzią domyślną (polityka gałęzi environment
+  odrzuca cały job), czyli jedyny dowód działania pochodziłby z żywej granicy.
+- *Bramki żywe tożsamością `plan` (read-only) w jobie bez environment.* Kuszące, bo testowalne z gałęzi
+  testowej i bez ryzyka zatrzymania wdrożenia. Odrzucone: bramka pytałaby innym kontem niż to, które
+  zmienia granicę, więc jej zielony wynik nie byłby zdaniem o mutatorze. Testowalność kupujemy inaczej —
+  bramki treści (w tym ta, która motywowała całą zmianę) stoją w jobie bez poświadczeń i bez environment.
+
+---
 
 ---
 
@@ -968,3 +1145,183 @@ reguły `vpcsc.onboarding` na pełnym zbiorze członków, i wymaga od niej `--co
   Rozważone przy #1979 (martwy członek produkuje fałszywy dowód czystego okna). Odrzucone: identyfikatora
   projektu w GCP **nie da się użyć ponownie** po skasowaniu, więc scenariusz „ten sam `project_id`, inny
   projekt" jest niewyrażalny, a kontrakt zyskałby pole, którego nikt nie czyta.
+
+---
+
+## DEC-19 — Access level deklaruje UZBROJENIE, a ścieżkę pozytywną mierzy kanarek, nie log
+
+**Decyzja.** Access level dostaje pole `armed` i trzy pola atestacyjne, a materiał dostaje **kanarka** —
+parę reguł baseline różniących się wyłącznie wymaganym poziomem. Trzy warstwy, każda na inne pytanie:
+
+1. **`armed: false` + `unarmed_reason`** — poziom mówi wprost, że dziś nie wpuszcza nikogo. Wymuszone tam,
+   gdzie da się to orzec maszynowo: zakresy wyłącznie dokumentacyjne (RFC 5737 `192.0.2.0/24`,
+   `198.51.100.0/24`, `203.0.113.0/24`; RFC 3849 `2001:db8::/32`) oraz kompozycja `AND` nad nieuzbrojonym
+   składnikiem. Poziom nieuzbrojony **referowany przez konfigurację EGZEKWOWANĄ** wywraca plan, chyba że
+   niesie `unarmed_accepted_until` z datą w przyszłości — świadomy, **wygasający** zapis.
+2. **`source_of_truth` + `reviewed` + `review_interval_days`** — uzbrojony poziom z zakresami IP musi
+   powiedzieć, skąd wartość i kiedy człowiek od sieci ją potwierdził. Przeterminowana atestacja czerwieni
+   plan **na poziomie stojącym w konfiguracji egzekwowanej**; poza nią zostaje informacją.
+3. **Kanarek** (`policy.yaml` §baseline_ingress, `boundary-probe.yml -f kanarek=…`) — dwie reguły
+   read-only różniące się **wyłącznie** access levelem, wołane tą samą tożsamością pipeline'u. Jedno
+   wywołanie ma przejść, drugie dostać odmowę VPC-SC.
+
+**Problem, który to zamyka — i dlaczego nie widać go w żadnym przeglądzie.** Access level z zakresem IP ma
+tryb awarii bez objawu: zakres przestaje pasować (zmienił się koncentrator VPN, doszło biuro, dostawca
+przenumerował pulę NAT), a obiekt w ACM wygląda identycznie jak przedtem. `describe` pokazuje treść, którą
+sami wysłaliśmy. Audit-log zapisuje **naruszenia**, nie wpuszczenia — więc „nikt tędy nie wszedł" i „nikt
+nie próbował" mają w logach ten sam obraz: pusty. Dowiadujesz się w dniu promocji, gdy ruch dywizji ginie.
+
+**Zmierzone (organizacja labu, 2026-08-12).** Wszystkie cztery poziomy stały na adresach dokumentacyjnych
+albo je dziedziczyły, a jedyna reguła **członkowska** w konfiguracji EGZEKWOWANEJ wskazywała
+`corp_network_and_region`, czyli `regions [PL, DE] AND corp_network(203.0.113.0/24, 198.51.100.0/24)`.
+Reguła stała w konfiguracji, która realnie blokuje, i **nie autoryzowała nikogo**. To ta sama klasa co
+reguła baseline bez `sources` — z jedną różnicą: tamtą dało się złapać kształtem reguły, tę widać
+wyłącznie w treści danych, więc nie łapała jej żadna z bramek.
+
+**Dlaczego ścieżki pozytywnej nie da się zmierzyć „zwykłym" sposobem.** Odmowę widać z dowolnego miejsca —
+wystarczy zawołać chronione API spoza perimetru. Żeby zobaczyć **wpuszczenie**, trzeba przyjść z miejsca,
+które poziom spełnia, a przy warunku `ip_subnetworks` znaczy to „z waszej sieci". Pipeline CI stoi poza
+nią. Trzy kandydatury na adres, z którego dałoby się sondować, i powód odrzucenia każdej — inny:
+
+* **Adres runnera dostawcy CI.** Nieznany przed przebiegiem i rotujący. Opublikowana lista zakresów
+  obejmuje **całą flotę CI dostawcy**, więc wpisanie jej do poziomu autoryzowałoby cudze pipeline'y —
+  poszerzenie granicy o rząd wielkości większe niż cokolwiek, co ta bramka chroni.
+* **Stała maszyna z zarezerwowanym adresem w regionie objętym warunkiem.** Technicznie spełnia OBA
+  warunki (`ip_subnetworks` i `regions`) i jest jedynym wariantem dającym uczciwy pomiar poziomu
+  sieciowego. Koszt: rezerwacja adresu ~5 USD/mies. utrzymywana bez przerwy, plus maszyna. Odrzucone
+  **z ceną w ręku**, nie „bo drogo": cały tor dowodowy tej granicy działa dotąd bez ani jednej maszyny,
+  a stały koszt pojawia się tu wyłącznie po to, żeby raz na jakiś czas udowodnić własność, którą kanarek
+  pokazuje za darmo. Wariant zostaje zapisany jako dostępny — w organizacji z własnym runnerem w sieci
+  korporacyjnej znika sam z siebie, bo ten runner JUŻ tam stoi.
+* **Adres człowieka/laptopa.** Jeden, nierotowalny i osobowy: spalony blokadą zostaje spalony, a wpisany
+  do konfiguracji wiąże całą granicę z jedną osobą fizyczną. Nie wchodzi niezależnie od wygody.
+
+**Dlaczego kanarek jest tożsamościowy, a mimo to nie jest obejściem kontroli sieciowej.** Poziom
+autoryzujący **wyłącznie** tożsamością nie dokłada nic ponad `ingressFrom.identities` reguły — a przy
+scenariuszu, dla którego access level w ogóle istnieje (skradzione poświadczenie użyte z cudzej sieci),
+zdejmuje jedyną obronę. Gdyby więc kanarkiem zastąpić warunek sieciowy w regule dywizji, byłoby to
+obejście, i tak to nazywamy. Kanarek jest czym innym w trzech wymiarach naraz i każdy z nich jest
+sprawdzalny w pliku: (a) stoi na **własnych** regułach `canary-*`, nigdy na regule dywizji;
+(b) tożsamością jest **konto pipeline'u**, nie konto aplikacji — to samo, które i tak ma regułę baseline;
+(c) celem są **dwie metody read-only opisujące konfigurację logowania**, nie dane. Kanarek nie zastępuje
+warunku sieciowego — mierzy **mechanizm**: czy access level, gdy jest spełniony, przepuszcza.
+
+**Dlaczego para, a nie pojedyncza sonda.** Pojedyncze „przeszło" nie mówi nic: ta sama metoda przechodzi
+też wtedy, gdy reguła jest szersza, niż wygląda, gdy perimetr nie obejmuje projektu i gdy usługa wypadła
+z `restricted_services`. Para różni się **jedną** rzeczą — poziomem wymaganym przez regułę — więc każda
+WSPÓLNA przyczyna (brak roli IAM, wyłączone API, zepsuty projekt, nieobecna reguła) daje ten sam wynik po
+obu stronach i nie potrafi wyprodukować rozjazdu. Rozjazd może pochodzić już tylko z access levelu.
+Stan `kanarek=rozbrojony` (obie sondy odmówione) jest **osobnym, zielonym** przelotem, a nie czerwonym:
+„para działa" znaczy coś dopiero wtedy, gdy widzieliśmy tę samą parę również NIE działającą.
+
+**Odpowiedź na „skąd wiadomo, że zakres jest nadal aktualny" — dwa różne narzędzia na dwie różne awarie.**
+`reviewed` + `review_interval_days` wykrywa **zaniedbanie procesu**: nikt od pół roku nie potwierdził
+wartości. Kanarek wykrywa **rozjazd faktyczny**: uruchomiony z runnera stojącego w sieci korporacyjnej
+i celujący w poziom z realnym zakresem przestaje przechodzić w dniu, w którym zakres przestaje pasować —
+zanim zobaczy to dywizja, bez czytania jakiegokolwiek logu. Zegar bez kanarka daje odhaczoną datę przy
+martwym zakresie; kanarek bez zegara nie pokrywa poziomów, których nie da się sondować (break-glass,
+device-trust). Dopiero razem mówią „ten poziom działa i ktoś za to odpowiada".
+
+### Alternatywy odrzucone
+
+- *Wykrywanie „nikt nie wszedł przez ten poziom od N dni" z logów.* Wariant pierwszego wyboru i odrzucony
+  po sprawdzeniu, co w tych logach jest. VPC-SC loguje **naruszenia**; wpisu „wpuszczono, bo access level
+  X pasował" nie ma. Wnioskowanie o wpuszczeniu wymagałoby **Data Access audit logs** na usługach
+  chronionych w każdym projekcie członkowskim — domyślnie wyłączonych i płatnych od wolumenu, a przy
+  kilkuset projektach to najdroższa pozycja całego wdrożenia. Do tego sygnał nie ma wartości
+  diagnostycznej: „zero wejść w N dni" jest **normalnym** stanem poprawnie zawężonej reguły (nikt nie
+  próbował), więc alert świeciłby na każdej cichej regule i zostałby wyciszony — a awaria, która nas
+  interesuje, i tak nie objawia się ciszą, tylko **serią odmów**, którą istniejący tor naruszeń już widzi.
+  Kanarek zamienia problem obserwacji w problem generacji: zamiast czekać na ruch, który może nigdy nie
+  przyjść, produkujemy własny, deterministyczny.
+- *Bramka zakazująca `ip_subnetworks` w poziomach referowanych przez konfigurację egzekwowaną.* Zamienia
+  defekt danych w zakaz prymitywu. Warunek sieciowy jest tu jedyną kontrolą **strukturalnie zdolną**
+  odciąć dostęp z nieznanej sieci (ani IAM Deny, ani PAB nie mają na wejściu pojęcia adresu), więc bramka
+  wypychająca go z użycia osłabia granicę pod pozorem sprzątania.
+- *Uznanie zakresów dokumentacyjnych za błąd także w dry-run.* Dry-run jest miejscem na konfigurację
+  niedokończoną — po to istnieje. Twarda bramka tam zmusiłaby do wpisywania realnych zakresów, zanim
+  ktokolwiek je potwierdzi, czyli produkowałaby dokładnie te wartości „na teraz", których ten mechanizm
+  ma nie dopuścić do konfiguracji egzekwowanej.
+- *Doliczenie RFC 1918 do zakresów-atrap.* Adres prywatny bywa **poprawną** wartością dla ruchu z sieci
+  korporacyjnej przez interconnect. Wspólny worek zamieniłby bramkę wykrywającą placeholder w bramkę
+  odrzucającą realny wzorzec — i nauczyłby ludzi ją obchodzić.
+- *`armed` liczone automatycznie zamiast deklarowanego.* Maszyna umie orzec „ten zakres jest
+  dokumentacyjny", nie umie orzec „ten zakres jest wasz i nadal działa". Pole wyliczane zgadywałoby
+  odpowiedź na drugie pytanie i dawałoby zielone światło każdemu zakresowi, który tylko wygląda realnie —
+  czyli dokładnie temu, przed czym ten mechanizm ma chronić.
+- *Domknięcie przechodnie nieuzbrojenia liczone w rendererze.* HCL nie ma rekurencji, więc wyszłoby albo
+  niepełne, albo rozwinięte na sztywną głębokość (a poziom „głębokość 4" pojawi się w dniu, w którym nikt
+  o tej granicy nie pamięta). Warunek lokalny „rodzic nieuzbrojonego dziecka też jest nieuzbrojony"
+  domyka się **indukcyjnie**, jest pełny dla dowolnego łańcucha i daje komunikat wskazujący oba poziomy.
+- *Kanarek jako osobny workflow.* Wtedy jest osobnym przebiegiem, osobnym uprawnieniem i osobną rzeczą do
+  zapomnienia. W `boundary-probe.yml` dokłada się do sondy, która i tak jest jedynym miejscem
+  produkującym zdania o świecie, i dziedziczy jej kluczową własność: werdykt stawiany z **treści**
+  odpowiedzi, nie z kodu błędu.
+
+---
+
+---
+
+## DEC-20 — Rozjazd ze starterem mierzymy DWOMA bramkami: wskaźnikiem i POKRYCIEM ZBIORU DECYZJI
+
+**Decyzja.** Obok porównania wskaźnika (`starter-drift`, DEC-9) stoi druga, węższa kontrola:
+`tools/decisions_check.py`. Pyta o dwie rzeczy i celowo w dwóch różnych miejscach:
+
+* **każdy numer decyzji CYTOWANY gdziekolwiek w repozytorium ma w `docs/0-decyzje.md` swoją sekcję** —
+  w `.github/actions/bramki-tresci`, czyli na obu torach (pull request i apply, DEC-16). Nie potrzebuje
+  ani sieci, ani startera, więc biegnie na każdym wniosku;
+* **zbiór decyzji tutaj pokrywa zbiór decyzji startera** (`--wzgledem`) — w `starter-drift`, bo to
+  wymaga pobrania pliku ze startera.
+
+Bramka porównuje **ZBIÓR NUMERÓW SEKCJI, nigdy treść**.
+
+**Problem, który to zamyka — i dlaczego wskaźnik go nie widział.** Wskaźnik odpowiada na pytanie „czy
+ktoś przeniósł commity", a nie „czy przeniósł całą ich treść". Zmierzone na wdrożeniu 2026-08-12:
+`.starter-sync` wskazywał aktualny `main` startera, `starter-drift` był zielony — a `docs/0-decyzje.md`
+nie zawierało **dwóch całych decyzji**. Jedna z nich (DEC-16, bramka na ścieżce mutatora) była w tym
+samym repozytorium cytowana w **dziewięciu miejscach**: `apply.yml`, `plan.yml`, `validate.yml`, reguły
+`onboarding.rego`, akcja bramki promocji. Kod odsyłał do uzasadnienia, którego w repo nie było.
+
+Sync commit-po-commicie nie ma jak tego zobaczyć: każdy pojedynczy przeniesiony commit wygląda na
+kompletny, a niekompletność ujawnia się dopiero na zbiorze. To jest ta sama klasa błędu co bramka
+czytająca nieistniejący plik — zielono, bo nie ma czego odrzucić.
+
+**Dlaczego akurat decyzje, a nie „pliki bez placeholderów".** Kuszący wariant — porównywać treść tych
+plików, które nie niosą wartości środowiska — **zmierzyliśmy i odrzuciliśmy**. Na tym wdrożeniu: 120
+plików z szablonu, 35 różniących się treścią, z tego 20 bez ani jednej wartości środowiska. Ale
+**12 z tych 20 różni się WYŁĄCZNIE pinami akcji**, które w repozytorium wdrożonym są NOWSZE niż
+w szablonie (podbija je Dependabot i ma to robić), a kolejne kilka — lokalnymi pomiarami dopisanymi
+do komentarzy. Bramka na treści tego zbioru byłaby więc czerwona od pierwszego dnia i z powodów
+całkowicie legalnych, czyli byłaby dokładnie tym, czego DEC-9 unika z premedytacją. Utrzymywana
+allowlista „plików porównywalnych" przenosi tylko problem: to ona zaczyna dryfować, i to po cichu.
+
+Zbiór numerów sekcji nie ma żadnej z tych wad. Jest odporny na wartości środowiska, na piny akcji
+i na lokalne przeredagowanie treści — a mierzy dokładnie to, czego brak boli: **uzasadnienie**.
+
+**Dlaczego dwa miejsca, a nie jedno.** Decyzja może zniknąć na dwa sposoby, a każdy widzi tylko jeden:
+sprawdzenie wewnętrzne łapie decyzję CYTOWANĄ (odsyłacz w pustkę), ale przepuści taką, której nikt nie
+cytuje; `--wzgledem` łapie właśnie tę drugą, ale wymaga sieci, więc nie może biec na każdym wniosku.
+Na wdrożeniu, które to wywołało, wystąpiły OBA warianty naraz: DEC-16 była cytowana dziewięć razy,
+DEC-14 nie była cytowana ani razu.
+
+**Fail-closed na zepsutym wejściu.** Plik pobrany ze startera bez ani jednej sekcji (404 zapisany do
+pliku, pusta odpowiedź API, zła ścieżka) jest **błędem**, nie zerem różnic. Bez tego bramka milczałaby
+dokładnie wtedy, gdy jej wejście przestało działać — czyli powtórzyłaby błąd, który sama zamyka.
+
+**Czego to NIE daje.** Nie mówi, że treść decyzji jest aktualna — tylko że sekcja istnieje. Decyzja
+przeniesiona jako sam nagłówek przechodzi. Świadomie: alternatywą jest porównanie treści, czyli bramka
+zawsze czerwona. Bramka mówi „przeniesiono kadłub, nie przeniesiono nic" — i tyle ma mówić.
+
+**Odrzucone.**
+- *Porównanie całego drzewa z wyjściem `install.sh`.* DEC-9 wprost: czerwone zawsze i legalnie, bo
+  wartości środowiska są dokładnie tym, co repozytorium wdrożone ma mieć.
+- *Porównanie treści plików „bez placeholderów", z allowlistą.* Zmierzone wyżej: czerwone od pierwszego
+  dnia przez piny Dependabota, a allowlista dryfuje sama i nikt tego nie mierzy.
+- *Wymóg ciągłej numeracji (`DEC-1`…`DEC-N` bez dziur).* Krótsze, ale fałszywe: numery pochodzą ze
+  startera i nigdy nie są przenumerowywane, więc wycofana decyzja zostawia legalną dziurę. Bramka
+  pytałaby o kształt zbioru zamiast o pokrycie.
+- *Reguła OPA zamiast osobnego narzędzia.* Reguły czytają `declarations.json` — dokument o granicy,
+  nie o repozytorium. Dołożenie tam listy plików repo zamieniłoby wejście reguł w drugą, cichą
+  reprezentację drzewa.
+- *Zgłoszenie zamiast czerwieni.* To już mamy przy wskaźniku i to działa: zgłoszenie jest artefaktem
+  do przeczytania przed promocją, ale nikt go nie przypisuje. Czerwony przebieg widać na stronie repo.
