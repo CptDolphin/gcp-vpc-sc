@@ -12,6 +12,21 @@ contracts_bucket    = "rwlab-vpcsc-contracts-46bc"
 # a robi to człowiek z uprawnieniami org-admin — nie pipeline perimetru (patrz nagłówek main.tf).
 monitoring_project_id = "rwlab-vpcsc-adm-46bc"
 
+# --- kontrola pozytywna sondy granicy ---------------------------------------------------------------
+# WYZNACZONY PROJEKT SONDUJĄCY (#2055). Kontrola pozytywna sondy (`chroniona-z-regula`) celuje odtąd
+# TUTAJ, a nie w projekt z wejścia przelotu — i tylko tutaj konto `plan` ma prawo odczytu logów
+# (rola własna `vpcScPositiveControlReader`, main.tf sekcja 3f).
+#
+# DLACZEGO `t-alpha`, a nie dowolny inny członek: kontrola pozytywna ma sens wyłącznie w projekcie
+# EGZEKWOWANYM (`status.resources`) — w dry-run granica niczego nie zatrzymuje, więc „przeszło" nie
+# dowodziłoby działania reguły. `rwlab-vpcsc-t-alpha` (930573188863) jest dziś jedynym członkiem
+# konfiguracji egzekwowanej, więc wybór jest wymuszony kształtem granicy, nie preferencją.
+#
+# Ta sama wartość MUSI stać w zmiennej repo `POSITIVE_CONTROL_PROJECT` — workflow czyta ją stamtąd,
+# a ten stack nadaje na niej uprawnienie. Rozjazd tych dwóch miejsc = sonda pyta o projekt, w którym
+# nie ma prawa czytać, czyli `BRAK ROLI` zamiast dowodu.
+positive_control_project_id = "rwlab-vpcsc-t-alpha"
+
 # --- warstwa IAM Deny -------------------------------------------------------------------------------
 # Kto UMIE sprawdzić, czy guardrail perimetru stoi. Bez tego grantu jedyną odpowiedzią API jest `403`,
 # a `403` w tym API nie odróżnia „nie ma" od „nie widzę" — org-admin nie ma `iam.denypolicies.*` z urzędu.
