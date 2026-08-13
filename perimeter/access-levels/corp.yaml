@@ -209,40 +209,6 @@ access_levels:
       - FR
       - NL
 
-  # =================================================================================================
-  # POZIOM OSIEROCONY, KTÓREGO KONTO `apply` NIE UMIE SKASOWAĆ — wpis przywrócony, żeby git zgadzał
-  # się z granicą (#1944, lab #2031)
-  # =================================================================================================
-  # Ten poziom NALEŻAŁ do członka `lab-rwlab-vpcsc-t-gamma` i po jego wyprowadzeniu (PR #92) nie
-  # referuje go nic. Miał zniknąć w tym samym apply — i był to trzeci z rzędu układ, w którym ta sama
-  # ścieżka rozbija się o inną warstwę:
-  #
-  #   1. `rules.tf` ma `depends_on` na access level PO TO, żeby `destroy` szedł w kolejności
-  #      reguła → poziom. ZADZIAŁAŁO: poziom zaczął się kasować 1 ms po `Destruction complete` reguły,
-  #      bez `you must first remove the reference` (pomiar 2026-08-13 06:46:11);
-  #   2. bramka OPA odrzucała każde kasowanie access levelu jako „ścieżkę break-glass" — naprawione
-  #      tego samego dnia (DEC-33): odrzucenie tylko wtedy, gdy poziom jest NADAL referowany;
-  #   3. rola własna `vpcScPerimeterWriter` **świadomie nie ma** `accesscontextmanager.accessLevels.delete`
-  #      (komentarz w `iam-bootstrap/main.tf`: „usunięcie poziomu odcina wszystkich, którzy go używają").
-  #      Apply padł na `Error 403: The caller does not have permission` DOKŁADNIE na tym zasobie, po
-  #      wykonaniu wszystkich pozostałych — czyli granica jest już bez t-gammy, a poziom został.
-  #
-  # DLACZEGO WPIS WRACA, A NIE ZOSTAJE DRYF: obiekt istnieje w ACM i siedzi w stanie Terraforma, więc
-  # `plan` pokazywał `1 to destroy`, a KAŻDY kolejny apply w tym repozytorium próbowałby go skasować
-  # i padał tym samym 403 — czyli jeden osierocony poziom zablokowałby całą drogę wdrożenia granicy.
-  # Wpis w konfiguracji jest tańszy i uczciwszy niż niemożliwy do wykonania plan.
-  #
-  # `armed: false` — bo tak ten katalog opisuje poziom, którego nic nie referuje (patrz `break_glass`
-  # wyżej): nie wpuszcza nikogo i ma to powiedzieć wprost, zamiast wyglądać w konsoli na gotową kontrolę.
-  # Warunek regionalny zostaje niezmieniony, żeby dzień skasowania nie mieszał dwóch zmian naraz.
-  - name: t_gamma_only
-    title: "Division t-gamma only (allowed region) — OSIEROCONY, do skasowania"
-    armed: false
-    unarmed_reason: "poziom osierocony po offboardingu t-gammy; nic go nie referuje, a konto apply nie ma accessLevels.delete (lab #2031)"
-    combining_function: AND
-    regions:
-      - PL
-
   # --- negacja: poziom, który spełnia się, gdy warunek NIE jest prawdziwy ------------------------
   # DLACZEGO ostrożnie: `negate: true` odwraca sens CAŁEGO warunku. Przydaje się do „wszędzie poza tym
   # zakresem", ale bardzo łatwo o pomyłkę — poziom nazwany „block-x" może w praktyce przepuszczać wszystko
