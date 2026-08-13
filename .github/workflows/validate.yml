@@ -121,6 +121,15 @@ jobs:
       - name: iam-bootstrap — validate
         run: terraform -chdir=iam-bootstrap validate
 
+      - name: SONDA — fmt exit code bez wrappera i z wrapperem
+        shell: bash
+        run: |
+          echo "--- wrapper (terraform z PATH, tak jak reszta krokow) ---"
+          terraform -chdir=violations-sink fmt -check -recursive; echo "RC_WRAPPER=$?"
+          echo "--- surowy binarny terraform ---"
+          "$TERRAFORM_CLI_PATH/terraform-bin" -chdir=violations-sink fmt -check -recursive; echo "RC_RAW=$?"
+          echo "--- which ---"
+          which terraform; ls -la "$TERRAFORM_CLI_PATH" || true
       - name: violations-sink — fmt
         run: terraform -chdir=violations-sink fmt -check -recursive
       - name: violations-sink — init (bez backendu)
