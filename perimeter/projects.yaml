@@ -30,8 +30,8 @@ members:
     dostaje mocniejszy warunek kontekstu; #1937 POMIAR TYMCZASOWY (bazowa polowa pary):
     caller_identities rozszerzone o druga tozsamosc i access level podmieniony na
     uzbrojony pomiar_pary_1937, zeby oba wywolania PRZESZLY — bez tej polowy zawezenie
-    w kolejnym kroku mierzyloby awarie srodowiska, nie regule. Dolozony profil
-    corp-user-console-access na grupie z czlowiekiem. Rewert w tym samym zadaniu'
+    w kolejnym kroku mierzyloby awarie srodowiska, nie regule. Dolozony profil corp-user-console-access
+    na grupie z czlowiekiem. Rewert w tym samym zadaniu'
   approved_by: mail@rafalwalas.com
   stage: enforced
   dry_run_since: '2026-08-12'
