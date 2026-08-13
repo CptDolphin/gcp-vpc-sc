@@ -105,3 +105,10 @@ variable "violations_reader_principals" {
     error_message = "Dozwolone wyłącznie `user:` i `group:`. Konto serwisowe raportu ma własną zmienną; inne konta maszynowe wymagają osobnej decyzji."
   }
 }
+
+# sonda #2058 — defekt celowy, PR nie bedzie mergowany
+variable "sonda_2058" {
+  description = "napis z „polskim cudzyslowem"
+  type        = string
+  default     = "x"
+}
