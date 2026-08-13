@@ -184,9 +184,17 @@ access_levels:
   # logowania, nie dane. Pełne uzasadnienie i odrzucone alternatywy: DEC-19.
   - name: ci_probe_match
     title: "Canary: identity the boundary probe actually uses"
-    armed: true
-    members:
-      - "serviceAccount:sa-vpcsc-plan@rwlab-vpcsc-adm-46bc.iam.gserviceaccount.com"
+    # ROZBROJONY NA CZAS POMIARU (#2043) — wraca do `armed: true` + `members` w kolejnym pull requeście.
+    # Po co: para kanarków W CZASIE. Ten sam przelot sondy, ta sama tożsamość, ta sama reguła — różni je
+    # WYŁĄCZNIE to, czy poziom jest uzbrojony. Bez tej połowy „uzbrojony wpuszcza" jest obserwacją, nie
+    # dowodem: nie wiadomo, czy wywołanie przeszło DZIĘKI poziomowi, czy mimo niego.
+    # Kształt jest kanoniczną postacią „rozbrojony" z nagłówka tego pliku: zakres dokumentacyjny RFC 5737,
+    # którego nie ma żaden host, plus jawna deklaracja z powodem i datą.
+    armed: false
+    unarmed_reason: "pomiar #2043 — polowa anty-tautologiczna pary kanarkow; uzbrojenie wraca w kolejnym PR"
+    unarmed_accepted_until: "2026-08-14"
+    ip_subnetworks:
+      - "203.0.113.7/32" # TEST-NET-3 (RFC 5737) — nie nalezy do zadnego hosta
 
   - name: ci_probe_mismatch
     title: "Canary: a different, existing platform identity the probe never uses"
