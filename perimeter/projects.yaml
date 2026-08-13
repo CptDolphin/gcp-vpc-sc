@@ -87,7 +87,12 @@ members:
     — ta zostala zmierzona na t-alpha (#1941). Profil vertex-online-serving z access
     levelem corp_network, czyli DOMYSLNY wariant wniosku: kazdy mocniejszy wariant
     mierzylby przypadek szczegolny, a ta sciezka ma opisac wniosek typowy (#1936,
-    wklad do #1989)'
+    wklad do #1989); #1944: access level corp_network -> t_gamma_only. Poziom referowany
+    WYLACZNIE przez tego czlonka — to warunek konieczny pomiaru kolejnosci przy offboardingu:
+    dopiero wtedy wyprowadzenie czlonka kasuje regule I poziom w JEDNYM przebiegu,
+    czyli sprawdza krawedz depends_on w rules.tf na zywym API zamiast w grafie. Zawezenie,
+    nie poluzowanie: corp_network jest nieuzbrojony (zakresy RFC 5737), t_gamma_only
+    niesie warunek regionalny realnie spelnialny'
   approved_by: mail@rafalwalas.com
   stage: dry-run
   dry_run_since: '2026-08-12'
@@ -98,4 +103,4 @@ members:
       caller_identities:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
       access_levels:
-      - corp_network
+      - t_gamma_only
