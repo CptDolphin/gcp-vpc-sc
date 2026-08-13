@@ -384,7 +384,7 @@ Wiązanie po stronie SA (kto może impersonować):
 
 ```
 sa-vpcsc-plan   ← roles/iam.workloadIdentityUser dla
-  principalSet://iam.googleapis.com/projects/102839858845/locations/global/workloadIdentityPools/github-actions/attribute.repository/ORG/gcp-vpc-sc
+  principalSet://iam.googleapis.com/projects/53079972993/locations/global/workloadIdentityPools/github-actions/attribute.repository/ORG/gcp-vpc-sc
 sa-vpcsc-apply  ← roles/iam.workloadIdentityUser dla tej samej puli,
                   ale ścieżkę zawęża principalSet po attribute.environment (perimeter-apply)
 ```
