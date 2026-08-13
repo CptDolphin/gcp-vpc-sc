@@ -184,17 +184,16 @@ access_levels:
   # logowania, nie dane. Pełne uzasadnienie i odrzucone alternatywy: DEC-19.
   - name: ci_probe_match
     title: "Canary: identity the boundary probe actually uses"
-    # ROZBROJONY NA CZAS POMIARU (#2043) — wraca do `armed: true` + `members` w kolejnym pull requeście.
-    # Po co: para kanarków W CZASIE. Ten sam przelot sondy, ta sama tożsamość, ta sama reguła — różni je
-    # WYŁĄCZNIE to, czy poziom jest uzbrojony. Bez tej połowy „uzbrojony wpuszcza" jest obserwacją, nie
-    # dowodem: nie wiadomo, czy wywołanie przeszło DZIĘKI poziomowi, czy mimo niego.
-    # Kształt jest kanoniczną postacią „rozbrojony" z nagłówka tego pliku: zakres dokumentacyjny RFC 5737,
-    # którego nie ma żaden host, plus jawna deklaracja z powodem i datą.
-    armed: false
-    unarmed_reason: "pomiar #2043 — polowa anty-tautologiczna pary kanarkow; uzbrojenie wraca w kolejnym PR"
-    unarmed_accepted_until: "2026-08-14"
-    ip_subnetworks:
-      - "203.0.113.7/32" # TEST-NET-3 (RFC 5737) — nie nalezy do zadnego hosta
+    # UZBROJONY. Para kanarków została zmierzona W CZASIE 2026-08-13 (#2043) — ten sam przelot sondy,
+    # ta sama tożsamość, ta sama reguła baseline, jedyna różnica w tym polu:
+    #   rozbrojony (ipSubnetworks 203.0.113.7/32): `kanarek-poziom-spelniony` ODMOWA VPC-SC
+    #   uzbrojony  (members = konto planu):        `kanarek-poziom-spelniony` PRZESZLO
+    # Sonda `kanarek-poziom-niespelniony` dała ODMOWĘ w OBU stanach — to ona pilnuje, że reguła istnieje,
+    # a niespełniony access level jest jedynym powodem jej odmowy. Bez połowy rozbrojonej „uzbrojony
+    # wpuszcza" byłoby obserwacją, nie dowodem. Procedura: docs/8-zmiany-reczne.md §8.3.
+    armed: true
+    members:
+      - "serviceAccount:sa-vpcsc-plan@rwlab-vpcsc-adm-46bc.iam.gserviceaccount.com"
 
   - name: ci_probe_mismatch
     title: "Canary: a different, existing platform identity the probe never uses"
