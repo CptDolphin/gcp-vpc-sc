@@ -211,7 +211,7 @@ access_levels:
 
   # =================================================================================================
   # POZIOM OSIEROCONY, KTÓREGO KONTO `apply` NIE UMIE SKASOWAĆ — wpis przywrócony, żeby git zgadzał
-  # się z granicą (#1944, lab #2036)
+  # się z granicą (#1944, lab #2031)
   # =================================================================================================
   # Ten poziom NALEŻAŁ do członka `lab-rwlab-vpcsc-t-gamma` i po jego wyprowadzeniu (PR #92) nie
   # referuje go nic. Miał zniknąć w tym samym apply — i był to trzeci z rzędu układ, w którym ta sama
@@ -238,7 +238,7 @@ access_levels:
   - name: t_gamma_only
     title: "Division t-gamma only (allowed region) — OSIEROCONY, do skasowania"
     armed: false
-    unarmed_reason: "poziom osierocony po offboardingu t-gammy; nic go nie referuje, a konto apply nie ma accessLevels.delete (lab #2036)"
+    unarmed_reason: "poziom osierocony po offboardingu t-gammy; nic go nie referuje, a konto apply nie ma accessLevels.delete (lab #2031)"
     combining_function: AND
     regions:
       - PL
