@@ -106,9 +106,9 @@ variable "violations_reader_principals" {
   }
 }
 
-# sonda #2058 — defekt celowy, PR nie bedzie mergowany
+# sonda #2058 — DEFEKT CELOWY, PR nie do mergowania.
+# `fmt -check` na tym pliku zwraca lokalnie exit 2 (zweryfikowane terraformem 1.15.5).
 variable "sonda_2058" {
-  description = "napis z „polskim cudzyslowem"
+  description = "napis z „cudzyslowem" i dalszy ciag"
   type        = string
-  default     = "x"
 }
