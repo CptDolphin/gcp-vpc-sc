@@ -42,6 +42,12 @@ restricted_services:
   - notebooks.googleapis.com
   - logging.googleapis.com
   - monitoring.googleapis.com
+  # DOŁOŻONE NA POMIAR (#2043) — wraca w kolejnym pull requeście. Po co: procedura zmiany tej listy
+  # (docs/8-zmiany-reczne.md §8.4) nie miała ANI JEDNEGO przelotu na żywej granicy, więc zdanie
+  # „ta zmiana dotyka wszystkich członków naraz i obu konfiguracji" było wnioskiem z kodu, nie pomiarem.
+  # `run` nie jest wołane przez nic w tym stosie, a API publikuje dla niego 68 metod (czyli nie wymaga
+  # wpisu w services_without_method_selectors) — najtańsza usługa do zmierzenia samej ŚCIEŻKI.
+  - run.googleapis.com
 
 # vpc_accessible_services = co wolno wołać Z WNĘTRZA perimetru. Trzymamy 1:1 z restricted_services.
 # DLACZEGO 1:1: pod-skopowana lista cicho psuje bootstrap workloadów (usługa objęta granicą, ale
