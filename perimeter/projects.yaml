@@ -92,3 +92,20 @@ members:
       - corp_network
       caller_identities:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
+- schema_version: 1
+  division: lab-probe
+  project_id: prj-x-test
+  project_number: '000000000000'
+  owner_group: grp@example.com
+  change_ref: snow:RITM0000123
+  approved_by: net-approver@example.com
+  stage: dry-run
+  dry_run_since: '2026-08-13'
+  review_by: '2027-02-09'
+  profiles:
+  - name: vertex-online-serving
+    params:
+      caller_identities:
+      - serviceAccount:a@b.iam.gserviceaccount.com
+      access_levels:
+      - corp_network
