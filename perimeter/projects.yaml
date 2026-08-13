@@ -27,7 +27,11 @@ members:
     pozostalych; #1939: access level corp_network -> corp_network_and_region. To ZAWEZENIE
     — poziom skladany dziedziczy warunek corp_network i doklada wlasny (regions PL/DE),
     a AND wymaga obu. Ten czlonek jest celem promocji do enforced, wiec swiadomie
-    dostaje mocniejszy warunek kontekstu'
+    dostaje mocniejszy warunek kontekstu; #1937 POMIAR TYMCZASOWY (bazowa polowa pary):
+    caller_identities rozszerzone o druga tozsamosc i access level podmieniony na
+    uzbrojony pomiar_pary_1937, zeby oba wywolania PRZESZLY — bez tej polowy zawezenie
+    w kolejnym kroku mierzyloby awarie srodowiska, nie regule. Dolozony profil corp-user-console-access
+    na grupie z czlowiekiem. Rewert w tym samym zadaniu'
   approved_by: mail@rafalwalas.com
   stage: enforced
   dry_run_since: '2026-08-12'
@@ -38,8 +42,15 @@ members:
     params:
       caller_identities:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
+      - serviceAccount:sa-vpcsc-caller-b@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
       access_levels:
-      - corp_network_and_region
+      - pomiar_pary_1937
+  - name: corp-user-console-access
+    params:
+      user_groups:
+      - group:grp-vpcsc-pomiar-a@rafalwalas.com
+      access_levels:
+      - pomiar_pary_1937
 - schema_version: 1
   division: lab
   project_id: rwlab-vpcsc-t-beta
