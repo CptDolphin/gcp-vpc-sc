@@ -54,7 +54,14 @@ approval zespołu sieciowego), zamiast czekać na ręczną zmianę wykonywaną p
    - roles/compute.networkViewer               pre-flight 3: Private Google Access na podsieciach
    - roles/dns.reader                          pre-flight 4: strefa DNS kierująca googleapis.com na restricted VIP
    - roles/monitoring.viewer                   refresh stanu czyta metryki i polityki alertów perimetru
-   - roles/logging.viewer                      raport naruszeń dry-run (knob `grant_logging_viewer`, patrz E)
+   - CUSTOM vpcScSinkReader (`logging.sinks.get`)   guard raportu: czy sink naruszeń istnieje i ma ten sam filtr
+     ŚWIADOMIE BEZ roles/logging.viewer — to prawo odczytu TREŚCI każdego logu w organizacji (28 uprawnień).
+     Raport czyta WIDOK sinka, a kontrola pozytywna sondy ma nadanie PER-PROJEKT (niżej).
+   [WIDOK KUBEŁKA SINKA NARUSZEŃ]
+   - roles/logging.viewAccessor                raport naruszeń + obserwator czytają jeden widok
+   [JEDEN PROJEKT SONDUJĄCY]
+   - CUSTOM vpcScPositiveControlReader         logging.logEntries.list + logging.logMetrics.list —
+                                               kontrola pozytywna sondy granicy (knob `positive_control_project_id`)
    [BUCKET STANU]
    - roles/storage.legacyBucketReader          na CAŁYM buckecie — backend GCS listuje workspace'y
    - roles/storage.objectAdmin                 z warunkiem na prefiks stanu (blokada .tflock to zapis)
