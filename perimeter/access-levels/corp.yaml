@@ -209,6 +209,28 @@ access_levels:
       - FR
       - NL
 
+  # =================================================================================================
+  # POZIOM NALEŻĄCY DO JEDNEGO CZŁONKA — i to jest realny, nie sztuczny układ (#1944)
+  # =================================================================================================
+  # Dywizja, która przychodzi z własną siecią, przychodzi też z własnym access levelem: jej zakresy nie
+  # mają czego robić w poziomie współdzielonym. Kiedy taka dywizja odchodzi, offboarding musi zabrać
+  # OBIE rzeczy naraz — regułę i poziom — bo poziom bez swojej dywizji nie ma czego autoryzować.
+  #
+  # To jest jedyny układ, w którym widać, czy `depends_on` w rules.tf działa. Reguła referuje poziom
+  # PO NAZWIE (string z YAML), więc Terraform nie zna tej zależności sam; bez wpisanej krawędzi oba
+  # `destroy` są w grafie NIEZALEŻNE i lecą równolegle, a jeden z możliwych porządków API odrzuca
+  # (`you must first remove the reference`). Dopóki każdy poziom w tym katalogu miał więcej niż jednego
+  # klienta, żaden offboarding nie kasował poziomu — i poprawka nie miała jak zostać sprawdzona na żywo.
+  #
+  # `regions` zamiast zakresów IP świadomie: poziom ma być NOŚNIKIEM pomiaru kolejności, a nie kolejnym
+  # nieuzbrojonym placeholderem RFC 5737. Warunek regionalny jest prawdziwy (spełnialny), nie wymaga
+  # atestacji zakresu i nie udaje kontroli sieciowej, której w labie nie ma.
+  - name: t_gamma_only
+    title: "Division t-gamma only (allowed region)"
+    combining_function: AND
+    regions:
+      - PL
+
   # --- negacja: poziom, który spełnia się, gdy warunek NIE jest prawdziwy ------------------------
   # DLACZEGO ostrożnie: `negate: true` odwraca sens CAŁEGO warunku. Przydaje się do „wszędzie poza tym
   # zakresem", ale bardzo łatwo o pomyłkę — poziom nazwany „block-x" może w praktyce przepuszczać wszystko
