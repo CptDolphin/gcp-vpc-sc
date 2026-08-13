@@ -38,7 +38,7 @@ STOP — policy.yaml NIE opisuje rzeczywistości.
 
 Nie importuj. Najpierw przenieś różnice DO PLIKU (kierunek: rzeczywistość → repo):
 
-    python3 tools/perimeter_to_policy.py --policy-id rwlab-ai-vertex-46bc --perimeter ai_core > /tmp/live.yaml
+    python3 tools/perimeter_to_policy.py --policy-id 829925107376 --perimeter ai_core > /tmp/live.yaml
     # przepisz restricted_services i perimeter.name z /tmp/live.yaml do perimeter/policy.yaml
 
 Potem uruchom ten skrypt ponownie. Różnica, którą zignorujesz teraz, wróci jako apply zmieniający zakres

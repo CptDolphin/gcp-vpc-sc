@@ -56,7 +56,8 @@ sieciowego), zamiast czekać na ręczną zmianę wykonywaną przez inżyniera.
 5. Bucket na stan Terraform: versioning + soft-delete, BEZ retention-lock.
 
 6. WARIANT MINIMALNY, jeśli punkt 1 wymaga dłuższej decyzji — nie blokujmy się nawzajem:
-   scoped access policy na folderze-piaskownicy (--scopes=folders/rwlab-ai-vertex-46bc) + roles/accesscontextmanager.policyEditor
+   scoped access policy na folderze-piaskownicy (--scopes=folders/<NUMER FOLDERU>, nie identyfikator projektu)
+   + roles/accesscontextmanager.policyEditor
    dla sa-vpcsc-apply NA TEJ POLITYCE + roles/accesscontextmanager.policyReader na organizacji (read-only,
    potrzebne do wylistowania polityk). Daje nam to pełny test pipeline'u bez prawa zapisu na polityce
    produkcyjnej; utworzenie i delegację musi wykonać ktoś z uprawnieniami org-level (jednorazowo).
