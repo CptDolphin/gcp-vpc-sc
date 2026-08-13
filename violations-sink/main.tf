@@ -349,7 +349,7 @@ resource "google_logging_log_view" "network_inserts" {
 
   name        = local.network_bucket_id
   bucket      = google_logging_project_bucket_config.network_inserts[0].id
-  description = "Admin Activity zdarzeń sterujących Compute — wejście alertu „obciążenie w sieci młodszej niż okno dojrzewania”."
+  description = "Admin Activity zdarzeń sterujących Compute — wejście alertu „obciążenie w sieci młodszej niż okno dojrzewania"."
   filter      = "LOG_ID(\"cloudaudit.googleapis.com/activity\")"
 }
 
