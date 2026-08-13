@@ -86,7 +86,7 @@ members:
   dry_run_since: '2026-08-13'
   review_by: '2027-02-09'
   profiles:
-  - name: vertex-online-serving
+  - name: vertex-online-servng
     params:
       access_levels:
       - corp_network

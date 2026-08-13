@@ -32,6 +32,11 @@ ingress:
     access_levels_from: access_levels
     to: member_project # jedyna dozwolona wartość: projekt członka (nigdy "*")
     operations:
+      # NEGATYW #1937 (ten PR NIE JEST DO SCALENIA): storage PUBLIKUJE liste metod, wiec `*` ma
+      # zostac odrzucone przez bramke na plan-JSON. Kontrola pozytywna stoi linijke nizej: aiplatform
+      # metod nie publikuje i `*` jest tam jedyna wartoscia, jaka API przyjmuje.
+      - service: storage.googleapis.com
+        methods: ["*"]
       - service: aiplatform.googleapis.com
         # Metody wypisane JAWNIE. `*` byłoby wygodniejsze i dawało wywołującemu prawo do trenowania,
         # eksportu modelu i czytania datasetów — czyli dokładnie tego, przed czym perimetr ma chronić.
