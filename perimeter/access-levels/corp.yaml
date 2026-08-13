@@ -208,37 +208,6 @@ access_levels:
     members:
       - "serviceAccount:sa-vpcsc-apply@rwlab-vpcsc-adm-46bc.iam.gserviceaccount.com"
 
-  # =================================================================================================
-  # POZIOM POMIAROWY — TYMCZASOWY, USUWANY W TYM SAMYM ZADANIU (#1937)
-  # =================================================================================================
-  # PO CO. Żeby zmierzyć, czy parametr `caller_identities` profilu REALNIE ZAWĘŻA, potrzebna jest para:
-  # tożsamość Z listy ma przejść, tożsamość SPOZA listy ma paść — a różnić je ma WYŁĄCZNIE ta lista.
-  # Każdy access level z konfiguracji nie nadaje się do tego z osobnego powodu: `corp_network_and_region`
-  # jest nieuzbrojony (nie wpuszcza nikogo, więc obie połowy pary padłyby z tej samej przyczyny),
-  # a `ci_probe_match` wymienia konto planu (spełniłaby go żadna z mierzonych tożsamości).
-  # Poziom niżej wymienia OBIE mierzone tożsamości oraz człowieka — dzięki temu access level przestaje
-  # być zmienną w tym pomiarze i jedyną różnicą między połowami pary zostaje `identities` reguły.
-  #
-  # DLACZEGO `members`, A NIE ZAKRES IP — ta sama argumentacja co przy kanarku wyżej: adres runnera
-  # i adres stanowiska człowieka są jedynymi, jakie lab ma, i żadnego nie da się wpisać uczciwie.
-  #
-  # TO NIE JEST WZORZEC DO KOPIOWANIA DO DYWIZJI. Poziom autoryzujący samą tożsamością nie dokłada nic
-  # ponad `identities` reguły — w regule produkcyjnej byłby obejściem kontroli sieciowej. Tutaj jest
-  # przyrządem pomiarowym o żywotności jednego zadania i jego usunięcie jest częścią tego zadania.
-  # ZOSTAJE JESZCZE JEDEN APPLY — kasowanie tego poziomu i zdjecie referencji do niego NIE MIESZCZA SIE
-  # W JEDNYM PRZEBIEGU. Zmierzone 2026-08-13: plan `1 to add, 1 to change, 1 to destroy` wykonal DESTROY
-  # JAKO PIERWSZY i padl na `you must first remove the reference`, zostawiajac konfiguracje EGZEKWOWANA
-  # w polowie drogi. `depends_on` na `google_access_context_manager_access_level.level` porzadkuje
-  # TWORZENIE, ale nie porzadkuje pary (aktualizacja reguly) -> (kasowanie poziomu). Ten PR robi wiec
-  # krok pierwszy: poziom ZOSTAJE, referencja znika. Krok drugi kasuje poziom osobnym apply.
-  - name: pomiar_pary_1937
-    title: "Measurement: both probed identities and the human (temporary, #1937)"
-    armed: true
-    members:
-      - "serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com"
-      - "serviceAccount:sa-vpcsc-caller-b@rwlab-ai-vertex-46bc.iam.gserviceaccount.com"
-      - "user:mail@rafalwalas.com"
-
   # --- geografia: odrzucenie ruchu z regionów, w których nie działamy ----------------------------
   # Kody ISO 3166-1 alfa-2. To NIE jest zabezpieczenie kryptograficzne (VPN je omija), ale tanio ucina
   # szum z regionów, w których nie mamy ani pracowników, ani infrastruktury.
