@@ -12,10 +12,19 @@
 #     plan without it the API rejects the setting and the environment silently ends up with no protection
 #     rule at all. `tools/bootstrap_github.sh` therefore READS THE SETTING BACK and refuses to report
 #     success on a missing human gate; `docs/1`, stage 4, says what to write down when there is none.
-#   * single-flight concurrency — Access Context Manager modifies the org-level policy as a whole and guards
-#     it with an eTag, so two parallel applies do not corrupt anything silently: the loser fails with
-#     `Error 400: The eTag provided ... does not match`. The reason to serialize is RELIABILITY — without it
-#     roughly every overlapping run fails and has to be retried by hand (measured, see DEC-6).
+#   * single-flight concurrency — Access Context Manager modyfikuje politykę org-level JAKO CAŁOŚĆ i pilnuje
+#     jej eTagiem. Do 2026-08-13 stało tu zdanie, że „dwa równoległe apply niczego po cichu nie psują, bo
+#     przegrywający pada na `Error 400: The eTag provided ... does not match`". **To zdanie jest OBALONE
+#     POMIAREM** (#1949, GCP-0227): tak zachowuje się WYŁĄCZNIE konfiguracja dry-run i każde TWORZENIE
+#     zasobu. Reguła EGZEKWOWANA aktualizowana W MIEJSCU (wariant ma `Update` w schemacie, więc provider
+#     robi read-modify-write po całej liście) ginie po cichu: na 9 przebiegów, w których OBA apply zgłosiły
+#     `rc=0`, **5 skończyło się brakiem jednej ze zmian w API**. Gdy w ogóle coś zgłasza, mówi
+#     `Provider produced inconsistent result after apply … Root object was present, but now absent` —
+#     nieodróżnialnie od „ktoś skasował moją regułę". Kontrola sekwencyjna: 6/6 komplet.
+#
+#     Serializacja jest więc kontrolą POPRAWNOŚCI, nie tylko niezawodności — i dlatego `retry` na eTagu
+#     został ODRZUCONY: leczyłby wyłącznie ścieżkę głośną, a podniósłby odsetek przebiegów „oba OK",
+#     czyli dokładnie tych, w których zmierzono utratę.
 #   * bramka promocji — jedyny punkt, w którym ten workflow ZATRZYMUJE SIĘ i czeka na człowieka, i jedyna
 #     kontrola tutaj, która NIE JEST ustawieniem repozytorium: działa na każdym planie GitHuba. Zatrzymuje
 #     apply, który zacząłby egzekwować granicę wobec członka będącego dziś w dry-run — bo to jedyna zmiana
