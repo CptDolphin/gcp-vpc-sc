@@ -97,9 +97,10 @@ members:
   project_id: rwlab-vpcsc-t-delta-2029
   project_number: '448841081593'
   owner_group: lab@rafalwalas.com
-  change_ref: 'manual:czlonek pomiarowy #2029 — kierunek odwrotny do §9.31. Tam okno otwieralo `networks
-    create` w projekcie JUZ egzekwowanym; tu siec istnieje od dawna, a dopisywany jest PROJEKT. Wchodzi
-    w dry-run, promocja idzie osobnym wnioskiem, po pomiarze offboarding'
+  change_ref: 'manual:czlonek pomiarowy #2029 — kierunek odwrotny do §9.31. Tam okno
+    otwieralo `networks create` w projekcie JUZ egzekwowanym; tu siec istnieje od
+    dawna, a dopisywany jest PROJEKT. Wchodzi w dry-run, promocja idzie osobnym wnioskiem,
+    po pomiarze offboarding'
   approved_by: mail@rafalwalas.com
   stage: dry-run
   dry_run_since: '2026-08-14'
