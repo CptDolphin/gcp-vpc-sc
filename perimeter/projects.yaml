@@ -102,9 +102,10 @@ members:
     dawna, a dopisywany jest PROJEKT. Wchodzi w dry-run, promocja idzie osobnym wnioskiem,
     po pomiarze offboarding'
   approved_by: mail@rafalwalas.com
-  stage: dry-run
+  stage: enforced
   dry_run_since: '2026-08-14'
   review_by: '2027-02-14'
+  unmeasured_peers_ack: 3
   profiles:
   - name: vertex-online-serving
     params:
