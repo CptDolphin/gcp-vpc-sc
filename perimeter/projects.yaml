@@ -110,6 +110,6 @@ members:
   - name: vertex-online-serving
     params:
       access_levels:
-      - corp_network
+      - corp_network_and_region
       caller_identities:
       - serviceAccount:sa-vpcsc-caller@rwlab-ai-vertex-46bc.iam.gserviceaccount.com
