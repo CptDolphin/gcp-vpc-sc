@@ -77,7 +77,7 @@ access_levels:
   #       - ENCRYPTED
 
   # --- DLACZEGO NIE MA TU POZIOMU `break_glass` ---------------------------------------------------
-  # Był — `armed: false`, jeden zakres `192.0.2.10/32` (RFC 5737) — i został USUNIĘTY (DEC-51, #2025).
+  # Był — `armed: false`, jeden zakres `192.0.2.10/32` (RFC 5737) — i został USUNIĘTY (DEC-52, #2025).
   # To nie jest sprzątanie kosmetyczne, tylko wniosek z tego, że DWIE RÓŻNE PROCEDURY NOSIŁY JEDNĄ NAZWĘ.
   #
   # `break-glass.yml` — procedura, którą to repozytorium MA i która została PRZEĆWICZONA na żywej granicy
