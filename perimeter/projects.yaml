@@ -32,7 +32,6 @@ members:
   stage: enforced
   dry_run_since: '2026-08-12'
   review_by: '2027-02-06'
-  unmeasured_peers_ack: 3
   profiles:
   - name: vertex-online-serving
     params:
