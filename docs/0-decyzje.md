@@ -1916,10 +1916,10 @@ Nagłówek `boundary-probe.yml` mówi teraz wprost, czego ten workflow **nie mie
 
 ## DEC-27 — Raport i bramka promocji mówią, WOBEC CZEGO okno było czyste
 
-> **Mechanizm potwierdzenia zastąpiony przez DEC-54.** Ustalenie tej decyzji — że okno obserwacji jest ślepe
+> **Mechanizm potwierdzenia zastąpiony przez DEC-55.** Ustalenie tej decyzji — że okno obserwacji jest ślepe
 > na pary między członkami w dry-run i że promocja wymaga świadomego przyjęcia tej ciszy — **zostaje w mocy
 > w całości**. Zmienia się wyłącznie JEDNOSTKA potwierdzenia: zbiór kluczy zamiast równości z licznikiem
-> globalnym. Powód i pomiar w DEC-54; akapit „dlaczego liczba, a nie flaga" niżej opisuje stan sprzed tamtej
+> globalnym. Powód i pomiar w DEC-55; akapit „dlaczego liczba, a nie flaga" niżej opisuje stan sprzed tamtej
 > zmiany i zostaje jako zapis rozumowania, które nie przeżyło zderzenia ze skalą.
 
 **Decyzja.** Raport naruszeń wypisuje listę członków pozostających w konfiguracji dry-run, a `promotion_gate`
@@ -3570,7 +3570,7 @@ deklaracją; bramki treści startera walidują strukturę workflow, a nie to, cz
 
 ---
 
-## DEC-54 — Potwierdzenie niezmierzonych par jest ZBIOREM kluczy, a nie równością z licznikiem globalnym
+## DEC-55 — Potwierdzenie niezmierzonych par jest ZBIOREM kluczy, a nie równością z licznikiem globalnym
 
 **Decyzja.** `unmeasured_peers_ack` w pliku członka jest **listą kluczy** (`<dywizja>-<project_id>`) tych
 członków zostających w dry-run, z którymi promowany członek **wymienia ruch**. `promotion_gate` sprawdza dwie
