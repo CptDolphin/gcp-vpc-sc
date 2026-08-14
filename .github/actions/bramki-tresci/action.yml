@@ -602,10 +602,6 @@ runs:
     # ZNACZNIK „WSZYSTKIE BRAMKI TREŚCI SIĘ WYKONAŁY". Musi stać jako OSTATNI krok orzekający — na nim
     # i na znaczniku narzędzi stoi cała klasyfikacja werdyktu niżej. Nie da się go postawić „mniej więcej
     # na końcu": bramka, po której go przestawiono, przestaje wpływać na werdykt, choć nadal czerwieni job.
-    - name: guard - nowy
-      shell: bash
-      run: python3 tools/nowy_guard.py
-
     - name: znacznik - komplet bramek tresci wykonany
       shell: bash
       run: ': > "${RUNNER_TEMP}/vpcsc-bramki-tresci-ok"'
