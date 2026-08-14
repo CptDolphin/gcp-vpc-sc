@@ -168,22 +168,10 @@ onboarding:
   # Zostawiony „na wszelki wypadek" przepuscilby NASTEPNY powrot bez dowodu az do 2026-08-16 — dokladnie
   # ten tryb awarii, ktory opisuje akapit wyzej.
   #
-  # 2026-08-14: JEDEN wyjatek, na czlonka pomiarowego #2029. Zwalnia WYLACZNIE z minimum dni w dry-run.
-  # Z dowodu czystego okna NIE zwalnia i zwolnic nie moze — i nie musi: raport za 14 dni daje temu
-  # czlonkowi 0 naruszen, wiec regula `count > 0` i tak nie strzela. Wyjatek wygasa nastepnego dnia
-  # i znika razem z offboardingiem czlonka; `granica_juz_wlaczona` wylaczy obie reguly zaraz po apply.
-  promotion_waivers:
-    - member: lab-rwlab-vpcsc-t-delta-2029
-      justification: 'Czlonek istnieje wylacznie po to, by zmierzyc, czy promocja otwiera okno po
-        stronie SIECI (#2029 — kierunek odwrotny do §9.31, gdzie okno otwieralo `networks create`).
-        Okna 14 dni nie da sie odczekac, bo mierzone jest samo PRZEJSCIE do konfiguracji egzekwowanej,
-        a nie ruch dywizji: odczekanie dalyby te sama liczbe, tylko dwa tygodnie pozniej. Bezpieczne,
-        bo projekt jest pusty (jedna maszyna sondujaca, zero obciazenia i zero uzytkownikow), okno
-        naruszen jest CZYSTE (0 wpisow w raporcie za 14 dni, przy 1903 dla t-alpha), a promocja jest
-        odwracalna bez niczyjej zgody (DEC-17 — bramka jest asymetryczna, rewert idzie automatem).'
-      approved_by: mail@rafalwalas.com
-      expires: '2026-08-15'
-      accept_dry_run_days_below_minimum: true
+  # 2026-08-14: stal tu przez ~15 minut JEDEN wyjatek, na czlonka pomiarowego `lab-rwlab-vpcsc-t-delta-2029`
+  # (#2029), zwalniajacy WYLACZNIE z minimum dni w dry-run. Znika razem z offboardingiem tego czlonka —
+  # dokladnie tak, jak zapowiadal, i z tego samego powodu, co wyjatek t-alphy opisany wyzej: zostawiony
+  # „na wszelki wypadek" przepuscilby NASTEPNA promocje tego klucza bez dowodu az do daty waznosci.
 
 # ZGODY SECURITY NA PROFILE WYPUSZCZAJĄCE DANE POZA GOOGLE CLOUD (DEC-23).
 #
