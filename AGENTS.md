@@ -57,6 +57,7 @@ a nie HCL.
 | Narzędzia bramek mają **jedno źródło, pin, sumę kontrolną i ponawianie** | `.github/actions/narzedzia` + asercja selftestu „zero kopii `curl`-a w `.github`" | ten sam `curl` stał w SZEŚCIU plikach, w żadnym z weryfikacją pobranego pliku binarnego — na ścieżce jedynego mutatora granicy. `--retry-all-errors` ponawia także błąd 60, czyli dokładnie zmierzony tryb awarii (DEC-26) |
 | `continue-on-error` ma **zapisany powód i widoczny `outcome`**, a na powierzchni bramek jest zakazane | `tools/continue_on_error_check.py` w `.github/actions/bramki-tresci` (oba tory) + para pozytyw/negatyw w selfteście | zmierzone: krok z tą flagą raportuje w REST API `steps[].conclusion: "success"` MIMO `##[error]` w logu — API nie wystawia per-krokowego `outcome`. Krok, którego porażki nie widać w API, jest gorszy niż krok bez flagi (DEC-26) |
 | Komentarz `# vX.Y.Z` przy pinie **nie kłamie**: jeden numer wersji = jeden SHA, jeden SHA = jeden numer | `rozjazdy_pinow()` w selfteście — skanuje CAŁE repo, z `examples/` i blokami kodu w markdownie | nikt nie rozwija 40-znakowego SHA-a w głowie, więc o wersji orzeka się z komentarza: fałszywy komentarz nie tyle nie pomaga, co **zwalnia ze sprawdzenia**. Zmierzone 2026-08-12, dwa przypadki naraz: `# v3.2.0` przy SHA-u tagowanym **v1.12.0** (`create-github-app-token`, akcja startowana z kluczem prywatnym Appa) i `# v2.1.9` przy SHA-u tagowanym **v3.0.0** (`auth` — pomyłka o wersję główną). Oba przeżyły, bo siedziały poza zasięgiem Dependabota, który przepisuje SHA *razem z komentarzem*, ale widzi tylko `.github/workflows/*.yml` i pliki `action.yml` |
+| **Wersje narzędzi (terraform, conftest, tflint) mają JEDNO źródło: `template/tool-versions.example`** | krok „odczytaj pinowane wersje narzędzi" w `selftest.yml` (fail-closed: brak pliku i brak wpisu = `exit 1`) + krok potwierdzający wersję z `terraform version -json` + asercja `test_wersje_narzedzi` w selfteście, porównująca każdy literał w drzewie ROZPAKOWANYM z `.tool-versions` | bramka dowodząca renderera biegnie wtedy na **innej** wersji niż wdrożenie. Zmierzone: krok czytał `.tool-versions` w korzeniu startera, którego tam nigdy nie było — `grep` padał, krok kończył się **zielono** z pustym wyjściem, a `setup-terraform` brał swój default, czyli `latest`. Osobny plik wersji w korzeniu startera byłby drugą deklaracją tej samej prawdy i wróciłby do tego samego stanu (DEC-54) |
 | **Materiał, który starter wysyła, stoi na JEDNEJ wersji każdej akcji** | `rozjazdy_wersji()` w selfteście — biegnie na drzewie ROZPAKOWANYM, z rejestrem `ROZJAZDY_WERSJI_UZNANE` porównywanym **na równość** | to jest inne pytanie niż wiersz wyżej i ma inną odpowiedź: dwie prawdziwe wersje nie są kłamstwem, więc tamta bramka ich nie zgłasza — a wdrożenie i tak dostaje mieszankę, której nikt nie wybrał. Powstaje sama: Dependabot nie czyta `template/**/*.yml.example`, więc pin szablonu zostaje na dniu narodzin pliku, a rozpakowane repo dostaje podbicie w pierwszym cyklu — i plik wniesiony ze startera **cofa** wdrożeniu wersję, którą Dependabot już tam wycofał (zmierzone: `checkout` o trzy wersje główne wstecz w trzech plikach). Rejestr na równość, bo lista długu, której nikt nie wykreśla, przeżywa dług (DEC-53) |
 | Każda decyzja CYTOWANA w repo ma sekcję w `docs/0-decyzje.md`, każdy numer ma **dokładnie jedną** sekcję, zbiór decyzji pokrywa zbiór startera, a żadne zdanie w repo nie deklaruje innego zakresu ani liczby decyzji niż realny | `tools/decisions_check.py` — bez argumentu w `.github/actions/bramki-tresci` (oba tory), `--wzgledem` w `starter-drift.yml`, `--tylko-deklaracje` na drzewie SAMEGO startera w selfteście (DEC-30) + testy wszystkich przypadków w selfteście | zdanie o rozmiarze rejestru nie ma właściciela: nikt nie dostaje zgłoszenia, gdy przestaje być prawdziwe. Zmierzone: ten sam nagłówek rozjechał się TRZY RAZY, a przy czwartym dwie równoległe gałęzie „naprawiły" go przeciwnie i scalenie zostawiło w rejestrze DWA nagłówki H1 — obie bramki zielone, bo sekcje i cytowania były na miejscu. Bramka nie zabrania wpisać liczby; sprawia, że wpisana czerwieni się w dniu, w którym przestaje być prawdziwa (DEC-20). `starter-drift` porównuje świadomie sam WSKAŹNIK (`.starter-sync` kontra `main` startera), bo porównanie drzewa świeciłoby na czerwono zawsze — wartości środowiska są dokładnie tym, co repo wdrożone ma mieć. Wskaźnik odpowiada więc na pytanie „czy ktoś przeniósł commity", a nie „czy przeniósł całą ich treść". Zmierzone: wskaźnik wskazywał aktualny `main`, bramka była zielona, a rejestr nie miał DWÓCH decyzji — jednej cytowanej w DZIEWIĘCIU miejscach tego samego repo (`apply.yml`, `plan.yml`, `validate.yml`, `onboarding.rego`, bramka promocji). Porównujemy ZBIÓR NUMERÓW, nigdy treść: treść wdrożenia różni się od szablonu legalnie (DEC-20). **Czwarte sprawdzenie — jeden numer, jedna sekcja:** numery przydziela KOLEJNOŚĆ MERGE'A, a nadaje je odczyt „ostatnia sekcja + 1”, więc dwie gałęzie czytające ten sam stan biorą tę samą liczbę — zmierzone CZTERY przenumerowania w jeden dzień. Powtórzony numer powstaje też bez konfliktu: trójstronny merge liczony od ZAPAMIĘTANEJ bazy nie wie, że „ours” dostało tę samą zmianę inną drogą, i wciąga cudzą sekcję DRUGI RAZ. Trzy sprawdzenia wyżej były na to ślepe, bo mapa numerów zwija powtórzenia do jednego klucza — licznik raportował wtedy „28 decyzji” na pliku z 29 sekcjami, kodem wyjścia 0. **Piąte — ZASIĘG:** sprawdzenia deklaracji biegną też na drzewie startera, bo rozpakowanie nie tworzy `selftest/`, `examples/`, `experiments/`, `README.md` ani `install.sh`, a deklaracja stojąca w `selftest/skan_samodzielnosci.py` przeżyła tam dwadzieścia jeden decyzji — prawdziwa w dniu wpisania, nieprawdziwa nazajutrz, niemierzona przez nic. Pytanie o CYTOWANIA zostaje przy repo rozpakowanym: drzewo startera cytuje numery nieistniejące z premedytacją (fixture dowodzący, że `--wzgledem` gryzie), więc pełna bramka byłaby tam czerwona na treści poprawnej (DEC-30) |
 | Alert `CRITICAL` ma kanał, którego **doręczenie** potwierdza maszyna; o skrzynce pocztowej repo nie twierdzi nic | `tools/kanaly_check.py` (werdykt per kanał i per polityka, kod wyjścia `1` przy braku) + test negatywny z krokiem człowieka w `docs/7-alerty.md` | poprzednia kontrola pytała o `verificationStatus` i **nie mogła odpowiedzieć**: pole jest enumem proto3, więc wartość domyślna nie serializuje się do odpowiedzi, a Google definiuje ją jako „stan nieznany, pominięty **albo nieadekwatny**". Brak pola nie znaczy „niezweryfikowany", znaczy „nie wiesz" — zmierzone również po `:sendVerificationCode` (HTTP 200), po którym `UNVERIFIED` musiałoby się pojawić, bo jest wartością niedomyślną. Komenda zwracała więc pustą kolumnę i zostawiała operatora z poczuciem, że sprawdził. Doręczenia na `email` nie potwierdza żadne API — potwierdza je człowiek (DEC-28) |
@@ -68,23 +69,82 @@ a nie HCL.
 
 | Token | Co wpisać |
 |---|---|
-| `179248107504` | numer organizacji Google Cloud |
-| `829925107376` / `829925107376` / `829925107376` | numer org-level access policy (`gcloud access-context-manager policies list`) |
-| `rwlab-vpcsc-tfstate-46bc` | bucket stanu Terraform (versioning + soft-delete, **bez** retention-lock) |
-| `rwlab-vpcsc-contracts-46bc` | bucket kontraktu — **musi być inny** niż bucket stanu |
-| `rwlab-vpcsc-adm-46bc` | projekt, w którym powstają metryki i alerty perimetru |
-| `sa-vpcsc-scanner` / `rwlab-vpcsc-adm-46bc` | konto serwisowe skanera bezpieczeństwa dla reguły `baseline_ingress` |
-| `CptDolphin` / `gcp-vpc-sc` | organizacja i nazwa repozytorium na GitHubie (`attribute_condition` WIF pinuje je oba) |
-| `rwlab-vpcsc-adm-46bc` / `rwlab-ai-vertex-46bc` / `102839858845` / `rwlab-ai-vertex-46bc` | projekt i jego numer w przykładach komend |
-| `ai_core` / `ai_core` | nazwa techniczna perimetru (niezmienialna po utworzeniu) |
-| `578145433296` | folder pod wariant testowy ze scoped policy (`docs/2` §4a) |
+| `<ORG_ID>` | numer organizacji Google Cloud |
+| `<ACCESS_POLICY_NUMBER>` / `<POLICY_ID>` / `<POLICY>` | numer org-level access policy (`gcloud access-context-manager policies list`) |
+| `<STATE_BUCKET>` | bucket stanu Terraform (versioning + soft-delete, **bez** retention-lock) |
+| `<CONTRACTS_BUCKET>` | bucket kontraktu — **musi być inny** niż bucket stanu |
+| `<MONITORING_PROJECT>` | projekt, w którym powstają metryki i alerty perimetru |
+| `<SCANNER_SA>` / `<SCANNER_PROJECT>` | konto serwisowe skanera bezpieczeństwa dla reguły `baseline_ingress` |
+| `<ORG>` / `<REPO>` | organizacja i nazwa repozytorium na GitHubie (`attribute_condition` WIF pinuje je oba) |
+| `<PROJEKT>` / `<PROJ>` / `<ID>` | **project_id** projektu w przykładach komend |
+| `<NUM_ADM>` | **numer** projektu ADMINISTRACYJNEGO perimetru — tego, w którym stoi pula WIF, monitoring i bucket stanu. Jeden na wdrożenie, ten sam w `WIF_PROVIDER` i w `principalSet` |
+| `<NUM_CZLONKA>` | **numer** projektu CZŁONKOWSKIEGO (dywizji) dokładanego do perimetru — INNY dla każdego wniosku. Do #2057 oba numery miały wspólny token `<NUM>`: wklejenie numeru administracyjnego tam, gdzie ma iść członkowski, daje test negatywny, który „przechodzi" z niewłaściwym argumentem, a odwrotna pomyłka daje `WIF_PROVIDER` wskazujący nieistniejącą pulę i awarię dopiero przy pierwszym `plan` w CI, z komunikatem o tokenie, nie o numerze |
+| `<PERIMETER>` / `<NAZWA>` | nazwa techniczna perimetru (niezmienialna po utworzeniu) |
+| `<FOLDER_SANDBOX>` | folder pod wariant testowy ze scoped policy (`docs/2` §4a) |
 | `<SHA_WYDANIA>` | tag/SHA paczki bramek przypinanej przez repozytoria zespołów |
+
+> **CO PODSTAWIONO W TYM WDROŻENIU.** Tabela wyżej jest REFERENCJĄ i musi pokazywać tokeny — to jej cała
+> funkcja. Do synchronizacji z 2026-08-15 miała je podstawione realnymi wartościami, przez co przestała
+> być listą placeholderów, a stała się ich zapisem; wtedy `grep -rn '<[A-Z_]*>'` na świeżym klonie nie
+> pokazywał już, czego brakuje. Rozdzielone: tabela zostaje referencją, a **zapis podstawień tego
+> wdrożenia** stoi niżej i jest jedyną rzeczą, którą to repo dokłada do materiału startera.
+>
+> | token | wartość w tym wdrożeniu |
+> |---|---|
+> | `<NUM_CZLONKA>` | `102839858845` |
+> | `<ORG_ID>` | `179248107504` |
+> | `<NUM_ADM>` | `53079972993` |
+> | `<FOLDER_SANDBOX>` | `578145433296` |
+> | `<ACCESS_POLICY_NUMBER>` | `829925107376` |
+> | `<ID_POLITYKI>` | `829925107376` |
+> | `<POLICY>` | `829925107376` |
+> | `<POLICY_ID>` | `829925107376` |
+> | `<ORG>` | `CptDolphin` |
+> | `<NAZWA>` | `ai_core` |
+> | `<PERIMETER>` | `ai_core` |
+> | `<PERIMETR>` | `ai_core` |
+> | `<REPO>` | `gcp-vpc-sc` |
+> | `<ID>` | `rwlab-ai-vertex-46bc` |
+> | `<PROJ>` | `rwlab-ai-vertex-46bc` |
+> | `<ADMIN_PROJECT>` | `rwlab-vpcsc-adm-46bc` |
+> | `<MONITORING_PROJECT>` | `rwlab-vpcsc-adm-46bc` |
+> | `<PROJEKT>` | `rwlab-vpcsc-adm-46bc` |
+> | `<PROJEKT_ADM>` | `rwlab-vpcsc-adm-46bc` |
+> | `<PROJEKT_ADMINISTRACYJNY>` | `rwlab-vpcsc-adm-46bc` |
+> | `<PROJEKT_MONITORINGU>` | `rwlab-vpcsc-adm-46bc` |
+> | `<SCANNER_PROJECT>` | `rwlab-vpcsc-adm-46bc` |
+> | `<CONTRACTS_BUCKET>` | `rwlab-vpcsc-contracts-46bc` |
+> | `<STATE_BUCKET>` | `rwlab-vpcsc-tfstate-46bc` |
+> | `<SCANNER_SA>` | `sa-vpcsc-scanner` |
+>
+> Kontrola po synchronizacji: dla każdej wartości z prawej kolumny liczba plików, w których
+> występuje, ma być **identyczna przed i po** — to jest kontrola „nic nie ubyło" z runbooka
+> `vpc-sc-starter-sync.md` §2, i to ona złapała, że pierwsze podejście do tej synchronizacji
+> cofnęło wartości w trzech plikach dokumentacji.
 | `@your-org/*` | realne zespoły GitHuba w `CODEOWNERS` |
 | zakresy IP w `access-levels/corp.yaml` | korporacyjne zakresy — w szablonie są adresy TEST-NET z RFC 5737. **To jedyny placeholder pilnowany przez bramkę:** dopóki stoją tam adresy dokumentacyjne, poziom musi nieść `armed: false` z powodem, a konfiguracja EGZEKWOWANA nie może go referować bez wygasającego `unarmed_accepted_until` (DEC-19). Po podmianie na własne: `armed: true` + `source_of_truth` + `reviewed` |
 
-Nazwy przykładowe (`example-division`, `prj-example-*`, `000000000000`, `RITM0000001`, `example.com`) są
-**jawnie fikcyjne i spójne w całym repo**. Jeśli zobaczysz nazwę wypadającą z tej konwencji, to jest błąd —
-guard `test_samodzielnosc` w selfteście pilnuje tego przy każdym przebiegu.
+Nazwy przykładowe (`example-division`, `prj-example-*`, `bkt-example-*`, `grp-example-*@example.com`,
+`000000000000`, `RITM0000001`) są **jawnie fikcyjne i spójne w całym repo**. Jeśli zobaczysz nazwę
+wypadającą z tej konwencji, to jest błąd — guard `test_samodzielnosc` w selfteście pilnuje tego przy
+każdym przebiegu, a `selftest/skan_samodzielnosci.py` wpina się dodatkowo jako osobna bramka
+(`samodzielnosc.yml`) i da się go uruchomić ręcznie: `python3 selftest/skan_samodzielnosci.py .`.
+
+**Konwencja jest EGZEKWOWANA, nie tylko opisana.** Skan pyta o kształt w kontekście, a nie o listę
+wartości zakazanych — dlatego łapie też identyfikatory wdrożeń, o których nic nie wie:
+
+| Klasa identyfikatora | Co ma stać w materiale | Co zapali bramkę |
+|---|---|---|
+| identyfikator projektu / dywizji | `prj-example-*`, `example-division` | token spoza konwencji, jeśli niesie prefiks znany denyliście skrótów |
+| numer projektu / organizacji / polityki dostępu | `000000000000`, `123456789012`, `210987654321` | 12 cyfr spoza listy oraz **dowolnej długości** numer w ścieżce `projects/`, `organizations/`, `folders/`, `accessPolicies/`, `billingAccounts/` |
+| kubełek | `gs://bkt-example-*` | każda nazwa w `gs://` bez członu `example` |
+| adres konta, grupy, właściciela | `…@example.com` | każda inna domena poza `*.gserviceaccount.com` (część adresu konta usługowego) i `*.github.com` (bot platformy) |
+| numer zgłoszenia | `RITM0000001` | `RITM` + siedem cyfr spoza `RITM0000xxx` |
+
+Nazwy własne konkretnych organizacji siedzą w denyliście jako **skróty SHA-256**, nigdy dosłownie:
+denylista z nazwą publikowałaby dokładnie to, co usuwa. Powód, dla którego to nie wystarcza, i warianty
+odrzucone po pomiarze (reguła „token wygląda na `project-id`" — 529 fałszywych trafień; reguła „losowy
+sufiks" — dziura na sufiksie bez cyfry) opisuje docstring `skan_samodzielnosci.py`.
 
 ## Rzeczy, które wyglądają na błąd, a są decyzją
 

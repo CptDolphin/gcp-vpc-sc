@@ -76,6 +76,40 @@ samo; rozstrzyga **treść**.
 ```bash
 python3 tools/perimeter_to_policy.py --policy-id 829925107376 --perimeter ai_core > /tmp/live.yaml
 ```
+Error: resource google_access_context_manager_service_perimeter_dry_run_ingress_policy
+       doesn't support import
+```
+
+W stanie mają `id` równy identyfikatorowi **perimetru**, nie własnemu — nie ma czego zaadresować.
+Konsekwencja dla przejęcia: **cudze reguły zostają poza zarządzaniem Terraforma**, na zawsze, dopóki
+ktoś ich nie odtworzy jako deklaracji.
+
+Chroni je `ignore_changes` na szkielecie (`status[0].ingress_policies`, `egress_policies` i odpowiedniki
+w `spec`) — zmierzone: po przejęciu cudze reguły są **co do bajtu te same**. Ale:
+
+- **drift detection ich nie pilnuje** (nie znamy stanu oczekiwanego),
+- **raport naruszeń nie przypisze ich do członka**,
+- w konsoli wyglądają identycznie jak nasze.
+
+### Jeśli mimo to chcesz je przejąć — tu jest okno bez autoryzacji
+
+Odtworzenie reguły jako deklaracji oznacza `create`. API odrzuca duplikat **po TYTULE**:
+
+```
+Error: Unable to create ServicePerimeterDryRunIngressPolicy, existing object already found:
+       … title:<tytuł>
+```
+
+Stąd dwa warianty i tylko jeden z nich jest bezpieczny:
+
+| wariant | co się dzieje | okno |
+|---|---|---|
+| **nasz tytuł ≠ cudzy tytuł** | powstaje **druga** reguła o tym samym skutku; cudza zostaje | **brak okna** — ruch autoryzowany przez cały czas. Cudzą kasujesz **po** potwierdzeniu, że nasza działa |
+| **ten sam tytuł** | `create` pada na duplikacie; żeby przeszedł, trzeba **najpierw skasować cudzą** | **okno realne**: od skasowania cudzej do `apply` naszej ruch **nie jest autoryzowany** |
+
+**Rób pierwszy wariant.** Drugi jest jedynym miejscem w całym przejęciu, gdzie granica przestaje
+przepuszczać ruch, który przepuszczała — i jeśli musisz go wybrać, zaplanuj okno jak zwykłą zmianę
+produkcyjną (ogłoszenie, obserwacja, gotowy rollback).
 
 Przenieś z `/tmp/live.yaml` do `perimeter/policy.yaml`: `perimeter.name`, `restricted_services`
 i **`vpc_accessible_services`**. Powtarzaj krok 1, aż zobaczysz `ZGODNE`.
