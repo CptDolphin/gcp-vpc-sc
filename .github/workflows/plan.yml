@@ -28,6 +28,8 @@ on:
       - ".github/workflows/**"
       # `.github/actions/**` — z tego samego powodu co `tools/**` wyżej: bramki żywe stoją teraz w akcji
       # złożonej, więc pull request zmieniający SAMĄ bramkę nie uruchamiałby jej ani razu.
+      # `.github/actions/**` — z tego samego powodu co `tools/**` wyżej: bramki żywe stoją teraz w akcji
+      # złożonej, więc pull request zmieniający SAMĄ bramkę nie uruchamiałby jej ani razu.
       - ".github/actions/**"
 
 permissions:

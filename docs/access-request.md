@@ -38,86 +38,48 @@ approval zespołu sieciowego), zamiast czekać na ręczną zmianę wykonywaną p
    - roles/resourcemanager.organizationViewer       [ORGANIZACJA]   konsola w ogóle pokazuje organizację
    - roles/accesscontextmanager.policyReader        [ORGANIZACJA]   odczyt polityki, perimetru, access levels
    - roles/browser                                  [ORGANIZACJA]   drzewo folderów/projektów (id <-> numer)
-   - roles/cloudasset.viewer                        [ORGANIZACJA]   pre-flight + wykrycie martwego członka
-   - roles/logging.viewer                           [ORGANIZACJA]   naruszenia dry-run = dowód przed promocją
+   - roles/cloudasset.viewer                        [ORGANIZACJA]   pre-flight: czy projekt istnieje / gdzie jest
+   - roles/logging.viewer                           [ORGANIZACJA]   podgląd naruszeń dry-run PRZEZ CZŁOWIEKA
+     (konto CI tej roli NIE dostaje — patrz niżej: czyta widok sinka + `vpcScSinkReader`)
    - roles/serviceusage.serviceUsageViewer          [ORGANIZACJA]   czy API objęte baselinem są włączone
    (minimum, gdyby trzeba było ciąć: organizationViewer + policyReader + browser)
-   UWAGA 1: granty ACM na folderze/projekcie NIE działają — tylko organizacja albo pojedyncza polityka.
-   UWAGA 2: nadanie „tylko na naszym folderze" dla POZOSTAŁYCH ról jest org-wide w przebraniu, jeśli
-            projekty członkowskie leżą w wielu folderach — a leżą zwykle w wielu. Pytamy o to w karcie
-            wejścia (§C3) przed, a nie po nadaniu.
+   UWAGA: granty ACM na folderze/projekcie NIE działają — tylko organizacja albo pojedyncza polityka.
 
 1. Konto serwisowe  sa-vpcsc-plan@rwlab-vpcsc-adm-46bc.iam.gserviceaccount.com   (read-only, uruchamiane przez każdy PR)
-   [ORGANIZACJA]
-   - roles/accesscontextmanager.policyReader   odczyt perimetru do `terraform plan`; pre-flight 1 i 2
-   - roles/cloudasset.viewer                   kontrola pozytywna sondy granicy + detektor martwego członka
-   - roles/compute.networkViewer               pre-flight 3: Private Google Access na podsieciach
-   - roles/dns.reader                          pre-flight 4: strefa DNS kierująca googleapis.com na restricted VIP
-   - roles/monitoring.viewer                   refresh stanu czyta metryki i polityki alertów perimetru
-   - CUSTOM vpcScSinkReader (`logging.sinks.get`)   guard raportu: czy sink naruszeń istnieje i ma ten sam filtr
-     ŚWIADOMIE BEZ roles/logging.viewer — to prawo odczytu TREŚCI każdego logu w organizacji (28 uprawnień).
-     Raport czyta WIDOK sinka, a kontrola pozytywna sondy ma nadanie PER-PROJEKT (niżej).
-   [WIDOK KUBEŁKA SINKA NARUSZEŃ]
-   - roles/logging.viewAccessor                raport naruszeń + obserwator czytają jeden widok
-   [JEDEN PROJEKT SONDUJĄCY]
-   - CUSTOM vpcScPositiveControlReader         logging.logEntries.list + logging.logMetrics.list —
-                                               kontrola pozytywna sondy granicy (knob `positive_control_project_id`)
-   [BUCKET STANU]
-   - roles/storage.legacyBucketReader          na CAŁYM buckecie — backend GCS listuje workspace'y
-   - roles/storage.objectAdmin                 z warunkiem na prefiks stanu (blokada .tflock to zapis)
-   [BUCKET KONTRAKTÓW, jeśli używany]
-   - roles/storage.objectViewer                refresh czyta opublikowany obiekt kontraktu
+   - roles/accesscontextmanager.policyReader        [ORGANIZACJA]
+   - roles/cloudasset.viewer                        [ORGANIZACJA]
+   - roles/compute.networkViewer                    [ORGANIZACJA lub foldery dywizji]
+   - roles/dns.reader                               [ORGANIZACJA lub foldery dywizji]
+   - roles/monitoring.viewer                        [ORGANIZACJA]   refresh alertów/deskryptorów perimetru
+   - CUSTOM ROLA organizations/179248107504/roles/vpcScSinkReader        [ORGANIZACJA]
+       logging.sinks.get      (JEDNO uprawnienie — guard: czy sink naruszeń istnieje i ma ten sam filtr)
+     ŚWIADOMIE BEZ roles/logging.viewer: raport czyta WIDOK sinka (viewAccessor), a kontrola pozytywna
+     sondy ma nadanie PER-PROJEKT w wyznaczonym projekcie sondującym. Konto CI nie ma prawa odczytu
+     treści logów na organizacji.
+   - CUSTOM ROLA projects/<PROJEKT_SONDUJACY>/roles/vpcScPositiveControlReader   [JEDEN PROJEKT]
+       logging.logEntries.list, logging.logMetrics.list
+   - roles/logging.viewAccessor                     [WIDOK kubełka sinka naruszeń]
+   - roles/storage.objectAdmin                      [prefiks bucketa stanu Terraform]
 
 2. Konto serwisowe  sa-vpcsc-apply@rwlab-vpcsc-adm-46bc.iam.gserviceaccount.com  (jedyna tożsamość zapisująca)
-   [ORGANIZACJA]
-   - CUSTOM ROLA organizations/179248107504/roles/vpcScPerimeterWriter
+   - CUSTOM ROLA organizations/179248107504/roles/vpcScPerimeterWriter    [ORGANIZACJA]
        accesscontextmanager.policies.get / list
        accesscontextmanager.servicePerimeters.get / list / update
-       accesscontextmanager.accessLevels.get / list / create / update / delete
-     (BEZ servicePerimeters.create, BEZ servicePerimeters.delete, BEZ policies.*)
-     `accessLevels.delete` JEST w tej roli świadomie — uzasadnienie w sekcji E.
-   [PROJEKT MONITORINGU]
-   - CUSTOM ROLA vpcScMonitoringWriter          pełny cykl życia metryk logowych i polityk alertów perimetru
-     (bez sinków, bez kubełków, bez IAM — patrz E)
-   [BUCKET STANU / KONTRAKTÓW]
-   - roles/storage.legacyBucketReader           na całym buckecie stanu (jak wyżej)
-   - roles/storage.objectAdmin                  z warunkiem na prefiks stanu; osobno na prefiks kontraktu
+       accesscontextmanager.accessLevels.get / list / create / update
+     (BEZ servicePerimeters.create, BEZ servicePerimeters.delete, BEZ accessLevels.delete, BEZ policies.*)
+   - roles/storage.objectAdmin                      [prefiks bucketa stanu Terraform]
 
-3. Konto serwisowe  sa-vpcsc-watch@…            (obserwator — publikuje telemetrię granicy)
-   [PROJEKT MONITORINGU]
-   - roles/monitoring.metricWriter              jedno uprawnienie, jeden projekt
-   Zakres jest celowo minimalny: to konto nie czyta perimetru, stanu ani kontraktu. Przejęte, potrafi
-   wyłącznie skłamać o telemetrii — a nie może być kontem `plan`, bo `plan` impersonuje KAŻDY pull request.
+3. IAM Deny [ORGANIZACJA] dla obu kont:
+   accesscontextmanager.servicePerimeters.delete
+   accesscontextmanager.policies.delete
 
-4. IAM Deny [ORGANIZACJA] dla kont plan i apply — polityka `vpcsc-ci-no-destroy`:
-   accesscontextmanager.googleapis.com/servicePerimeters.delete
-   accesscontextmanager.googleapis.com/policies.delete
-   accesscontextmanager.googleapis.com/servicePerimeters.create
-   KTO TO APPLIKUJE: potrzebny jest `roles/iam.denyAdmin` — JEDYNA rola niosąca `iam.denypolicies.create`;
-   roli własnej z tym uprawnieniem zbudować SIĘ NIE DA (`customRolesSupportLevel = NOT_SUPPORTED`).
-   Powinien go trzymać zespół IAM ROZŁĄCZNY z właścicielem perimetru — inaczej warstwa nie stoi PONAD
-   rolami, tylko obok nich. Nam wystarcza odczyt (rola własna `vpcScDenyReader`): `terraform plan` schodzi
-   do `No changes` na samym odczycie polityki. Jeśli nikt tego nie nada — powiedzcie wprost; wdrożenie
-   ustawi wtedy `manage_deny_policy = false` i zapisze brak tej warstwy jako decyzję, a nie jako lukę.
-
-5. Workload Identity Federation: pula + provider OIDC GitHub z attribute_condition ograniczającym do
+4. Workload Identity Federation: pula + provider OIDC GitHub z attribute_condition ograniczającym do
    repozytorium CptDolphin/gcp-vpc-sc; wiązania roles/iam.workloadIdentityUser na obu kontach.
-   Konto apply jest dodatkowo związane z GitHub environment, więc token z pull requesta go nie dosięga.
 
-6. Bucket na stan Terraform: versioning + soft-delete, BEZ retention-lock. Bucket kontraktów — OSOBNY.
-   Prefiksy stanu perimetru i stanu iam-bootstrap muszą być RÓŻNE: konta CI perimetru nie mogą nadpisać
-   stanu stacku, który nadaje im uprawnienia.
+5. Bucket na stan Terraform: versioning + soft-delete, BEZ retention-lock.
 
-7. KROK CZŁOWIEKA, o którym łatwo zapomnieć, bo nie jest uprawnieniem dla naszego pipeline'u:
-   stack `violations-sink/` (kubełki logów, sinki ORG-LEVEL z include_children, widoki, granty
-   logging.viewAccessor) applikuje CZŁOWIEK z org-level `roles/logging.configWriter`. Konto pipeline'u
-   tej roli świadomie nie ma — para „sink + kubełek" to gotowa ścieżka wyprowadzenia logów gdzie indziej.
-   BEZ TEGO KROKU: granica stoi i działa, ale obserwator nie ma czego czytać — raport naruszeń i detektor
-   okna świeżej sieci milczą, a zgłosi to dopiero dead-man's-switch. Prosimy o wskazanie osoby lub grupy.
-
-8. WARIANT MINIMALNY, jeśli punkt 1 wymaga dłuższej decyzji — nie blokujmy się nawzajem:
-   scoped access policy na folderze-piaskownicy (--scopes=folders/<NUMER FOLDERU>, nie identyfikator projektu)
-   + roles/accesscontextmanager.policyEditor
+6. WARIANT MINIMALNY, jeśli punkt 1 wymaga dłuższej decyzji — nie blokujmy się nawzajem:
+   scoped access policy na folderze-piaskownicy (--scopes=folders/rwlab-ai-vertex-46bc) + roles/accesscontextmanager.policyEditor
    dla sa-vpcsc-apply NA TEJ POLITYCE + roles/accesscontextmanager.policyReader na organizacji (read-only,
    potrzebne do wylistowania polityk). Daje nam to pełny test pipeline'u bez prawa zapisu na polityce
    produkcyjnej; utworzenie i delegację musi wykonać ktoś z uprawnieniami org-level (jednorazowo).
