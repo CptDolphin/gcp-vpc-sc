@@ -83,7 +83,7 @@ members:
   approved_by: mail@rafalwalas.com
   stage: dry-run
   dry_run_since: '2026-08-13'
-  review_by: '2027-02-09'
+  review_by: '2026-08-01'
   profiles:
   - name: vertex-online-serving
     params:
