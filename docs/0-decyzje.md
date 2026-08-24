@@ -474,9 +474,10 @@ projektu do listy równie czytelnie jak powstanie nowej reguły. Wymóg wynikaj�
 
 **Migracja istniejącego wdrożenia NIE JEST refaktorem adresu — zmierzone.** Naturalny odruch to bloki
 `moved{}` (zmiana kształtu renderowania zmienia adresy w stanie). Tutaj **nie pomagają i plan jest z nimi
-identyczny**: w providerze `hashicorp/google` (zmierzone na 7.43) `title` ORAZ `ingress_to.resources`
-w `google_access_context_manager_service_perimeter[_dry_run]_ingress_policy` są **ForceNew**, więc
-przeniesiony zasób i tak jest zastępowany (`# forces replacement`). Do tego `moved` jest z definicji 1:1,
+identyczny**: w providerze `hashicorp/google` (zmierzone na 7.43) `title` jest **ForceNew w OBU**
+wariantach zasobu — a kolaps zmienia właśnie tytuł, więc przeniesiony zasób i tak jest zastępowany
+(`# forces replacement`). (`ingress_to.resources` jest ForceNew **wyłącznie w wariancie dry-run** —
+patrz sprostowanie w DEC-11; dla tego wniosku nie ma to znaczenia, bo wystarcza `title`.) Do tego `moved` jest z definicji 1:1,
 a kolaps jest N→1. Wniosek: plan **zawsze** pokaże `N to add, N×M to destroy` i nie jest to błąd konfiguracji.
 Bezpieczeństwo migracji zapewnia **kolejność, nie plan**:
 
@@ -506,8 +507,8 @@ z `-parallelism=1`: każda reguła to osobny PATCH na tym samym obiekcie org-lev
   Rozdział dry-run/enforced na dwa warianty tej samej reguły trzyma tę zmienność w liście zasobów.
 
 > **CIĄG DALSZY W DEC-11.** Ostatni akapit powyżej opisuje problem, którego ta decyzja **nie rozwiązała do
-> końca**: lista zasobów została w regule, a `ingress_to.resources` jest `ForceNew`, więc replace reguły
-> wspólnej wracał przy **każdym** wniosku. Liczby „19 + 2 × N" i „2 atrybuty na członka" są więc historyczne —
+> końca**: lista zasobów została w regule, a `ingress_to.resources` jest `ForceNew` w wariancie dry-run,
+> więc replace reguły wspólnej wracał tam przy **każdym** wniosku. Liczby „19 + 2 × N" i „2 atrybuty na członka" są więc historyczne —
 > aktualny kształt (`resources = ["*"]`, koszt baseline stały) opisuje DEC-11.
 
 ---
@@ -516,8 +517,8 @@ z `-parallelism=1`: każda reguła to osobny PATCH na tym samym obiekcie org-lev
 
 **Problem — defekt, który powstał razem z DEC-10.** Kolaps zdjął powielanie CAŁEJ reguły baseline na każdego
 członka, ale zostawił w niej listę, która nadal rośnie z każdym wnioskiem: `ingress_to.resources`. To pole jest
-w providerze `hashicorp/google` (zmierzone na 7.43.0) **`ForceNew`**, więc dopisanie jednej pozycji nie jest
-aktualizacją reguły, tylko jej **zastąpieniem**. Zmierzone — stan żywy trzech członków plus jeden nowy członek
+w providerze `hashicorp/google` (zmierzone na 7.43.0) **`ForceNew` w wariancie dry-run** — i tylko tam — więc
+dopisanie jednej pozycji nie jest tam aktualizacją reguły, tylko jej **zastąpieniem**. Zmierzone — stan żywy trzech członków plus jeden nowy członek
 w konfiguracji, `terraform plan -refresh=false`:
 
 ```
@@ -528,11 +529,27 @@ w konfiguracji, `terraform plan -refresh=false`:
 Plan: 4 to add, 1 to change, 2 to destroy.
 ```
 
-W konfiguracji **dry-run** replace jest nieszkodliwy: ta konfiguracja niczego nie autoryzuje. Znaczenie ma
-**konfiguracja egzekwowana**. Terraform kasuje przed utworzeniem, więc każda promocja (i każdy wniosek po
-pierwszej promocji, bo zmienia listę obu wariantów reguły) otwierała okno, w którym **żaden** promowany członek
-nie ma reguły skanera ani reguły raportu naruszeń. To jest dokładnie ta awaria, po którą baseline istnieje —
-z tą różnicą, że **powtarzalna przy każdym wniosku**, a nie jednorazowa jak sama migracja z DEC-10. Przy
+**SPROSTOWANIE — pierwotne uzasadnienie tej decyzji było za mocne.** Stało tu zdanie, że replace dotyka
+**konfiguracji egzekwowanej** i otwiera okno, w którym żaden promowany członek nie ma reguły skanera.
+Pomiar tego nie potwierdza: w JEDNYM planie, przy tej samej zmianie tego samego pola, wariant
+`…_dry_run_ingress_policy` daje `must be replaced`, a `…_ingress_policy` — `will be updated in-place`.
+Kontrola niezależna ze schematu providera: warianty `_dry_run_*` mają timeouty wyłącznie `create`/`delete`
+(brak funkcji Update ⇒ wszystko ForceNew), egzekwowane mają też `update`. Najczarniejszy wariant **nie
+zachodzi**; cytat planu wyżej pokazuje zresztą wyłącznie zasoby dry-run.
+
+**Decyzja się broni, ale na trzech innych argumentach — każdym z osobna wystarczającym:**
+
+1. **Replace w dry-run przy KAŻDYM wniosku brudzi dowód, który system konsumuje.** Między destroy a create
+   konfiguracja dry-run nie ma reguły baseline. Ta konfiguracja niczego nie autoryzuje, ale **produkuje
+   dowód**: brak reguły w tym oknie generuje naruszenia przypisane członkom, a `promotion_gate` wymaga okna
+   **bez** naruszeń. Narzędzie psuje więc dokładnie ten artefakt, na którym stoi promocja. To jest wniosek
+   z mechaniki — przechwycenia naruszenia w oknie replace'u **nie mierzyliśmy**.
+2. **Zapis O(N) na regułach wspólnych:** każdy wniosek to 4 zapisy na regułach baseline (2 destroy
+   + 2 create) przy kwocie `write_requests` 50/min i eTagu na obiekcie org-plane.
+3. **2 atrybuty na członka** w każdej konfiguracji, przy limicie 6000 **na konfigurację**.
+
+Poprawka usuwa wszystkie trzy naraz, więc kształt rozwiązania się nie zmienia — zmienia się to, co o nim
+mówimy. Przy
 50 wnioskach miesięcznie to ~50 okien miesięcznie na całej granicy.
 
 **Decyzja.** `ingress_to.resources = ["*"]` w obu wariantach reguły baseline (`baseline_rules_all`,

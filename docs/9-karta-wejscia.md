@@ -527,9 +527,12 @@ osobno: **11 s na projekt**, czyli 300 projektów szeregowo to **55 min**.
 poziomu dywizji. Dla dywizji o 40 członkach: **44 atrybuty zamiast 200**, koszt na członka spada
 z ~9,9 do ~1,75, sufit rośnie z ~620 do **~3 300** członków.
 
-**Cena, nazwana wprost:** pole `resources` reguły ingress jest `ForceNew` — dopisanie członka **zastępuje**
-regułę całej dywizji, więc każdy onboarding otwiera okno, w którym **cała dywizja** traci tę regułę.
-Minuty, nie sekundy. Dlatego to jest dźwignia druga, nie pierwsza.
+**Cena, nazwana wprost:** pole `resources` reguły ingress jest `ForceNew` **w wariancie dry-run** (wariant
+egzekwowany aktualizuje się w miejscu — sprostowanie w DEC-11), więc każdy onboarding zastępuje regułę całej
+dywizji w konfiguracji obserwowanej. Okno bez reguły nie odcina ruchu, ale **generuje naruszenia przypisane
+całej dywizji** — czyli psuje dowód, na którym stoi promocja każdego jej członka. Do tego zapis rośnie
+z liczbą dywizji, a nie członków. Dlatego to jest dźwignia druga, nie pierwsza — i wymaga zmierzenia
+u siebie przed użyciem, bo nikt nie mierzył tego osobno dla reguł profilowych.
 
 **Jeśli nie dzielą tożsamości:** dźwignia jest niedostępna i sufit ~620 zostaje twardy.
 
