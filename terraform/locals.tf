@@ -184,9 +184,9 @@ locals {
   # zdjął to powielenie, ale zostawił w regule listę, która nadal rośnie z każdym członkiem — i to
   # kosztowało DRUGI raz, w innej walucie niż budżet:
   #
-  # `ingress_to.resources` JEST `ForceNew` w providerze `hashicorp/google` (zmierzone na 7.43.0), więc
-  # dopisanie jednego projektu do listy nie jest aktualizacją reguły, tylko jej ZASTĄPIENIEM. ZMIERZONE
-  # (stan żywy 3 członków + jeden nowy członek w konfiguracji, `terraform plan -refresh=false`):
+  # `ingress_to.resources` jest `ForceNew` W WARIANCIE DRY-RUN — i tylko tam. Dopisanie jednego projektu
+  # do listy nie jest tam aktualizacją reguły, tylko jej ZASTĄPIENIEM. ZMIERZONE (stan żywy 3 członków
+  # + jeden nowy członek w konfiguracji, `terraform plan -refresh=false`):
   #
   #     # …dry_run_ingress_policy.rule["baseline--platform-violations-read"] must be replaced
   #           ~ resources = [ # forces replacement
@@ -194,12 +194,26 @@ locals {
   #           ~ resources = [ # forces replacement
   #     Plan: 4 to add, 1 to change, 2 to destroy.
   #
-  # Terraform kasuje PRZED utworzeniem, a `create_before_destroy` nie jest tu wyjściem (DEC-11: wszystkie
-  # granularne reguły mają w stanie TEN SAM `id` — sam perimetr — więc „nowy obok starego" znaczy dwie
-  # reguły o tym samym tytule w jednej liście). W konfiguracji dry-run replace jest nieszkodliwy, bo ona
-  # niczego nie autoryzuje. W konfiguracji EGZEKWOWANEJ to okno, w którym ŻADEN promowany członek nie ma
-  # reguły skanera ani reguły raportu naruszeń — dokładnie ta awaria, po którą baseline w ogóle istnieje,
-  # tyle że powtarzalna przy KAŻDYM wniosku i KAŻDEJ promocji, a nie jednorazowa jak sam kolaps.
+  # WARIANT EGZEKWOWANY ZACHOWUJE SIĘ INACZEJ i wcześniejsze brzmienie tego komentarza było tu za mocne.
+  # Zmierzone w JEDNYM planie, ta sama zmiana tego samego pola, dwa typy zasobu: `…_dry_run_ingress_policy`
+  # → `must be replaced`, `…_ingress_policy` → `will be updated in-place`. Kontrola niezależna ze schematu
+  # providera (7.43.0): warianty `_dry_run_*` mają timeouty wyłącznie `create`/`delete` — brak funkcji
+  # Update, więc KAŻDE ich mutowalne pole jest ForceNew — a warianty egzekwowane mają też `update`.
+  # (`title` jest ForceNew w OBU, sprawdzone osobno izolowaną zmianą samego tytułu.)
+  #
+  # CO Z TEGO ZOSTAJE — trzy powody, każdy zmierzony, i każdy sam wystarcza:
+  #   1. REPLACE W DRY-RUN PRZY KAŻDYM WNIOSKU BRUDZI DOWÓD, KTÓRY SYSTEM KONSUMUJE. Między destroy
+  #      a create konfiguracja dry-run nie ma reguły baseline. Nie blokuje to ruchu, ale dry-run PRODUKUJE
+  #      DOWÓD: brak reguły w tym oknie generuje naruszenia przypisane członkom, a `promotion_gate` wymaga
+  #      okna BEZ naruszeń. Narzędzie psuje więc dokładnie ten artefakt, na którym stoi promocja.
+  #      (Wniosek z mechaniki — przechwycenia naruszenia w oknie replace'u NIE mierzyliśmy.)
+  #   2. ZAPIS O(N) NA REGUŁACH WSPÓLNYCH: każdy wniosek to 4 zapisy na regułach baseline (2 destroy
+  #      + 2 create) przy kwocie `write_requests` 50/min i eTagu na obiekcie org-plane.
+  #   3. 2 ATRYBUTY NA CZŁONKA w każdej konfiguracji, przy limicie 6000 NA KONFIGURACJĘ.
+  #
+  # `create_before_destroy` nie jest wyjściem w żadnym z tych punktów (DEC-11: wszystkie granularne reguły
+  # mają w stanie TEN SAM `id` — sam perimetr — więc „nowy obok starego" znaczy dwie reguły o tym samym
+  # tytule w jednej liście).
   #
   # `*` USUWA PRZYCZYNĘ, A NIE OBJAW: reguła przestaje zależeć od członkostwa, więc nie ma czego
   # replace'ować. Dokumentacja VPC-SC (ingress-egress-rules) mówi o tym polu wprost — `*` dopasowuje
