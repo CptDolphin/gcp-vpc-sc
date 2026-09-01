@@ -4,7 +4,7 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 7.0"
+      version = "~> 8.0"
     }
     # google-beta TYLKO dla google_iam_deny_policy — ten zasób nie ma odpowiednika w GA.
     # Reszta stacku jedzie na providerze GA.
