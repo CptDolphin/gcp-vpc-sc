@@ -11,7 +11,7 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 7.0"
+      version = "~> 8.0"
     }
     # `time` — WYŁĄCZNIE dla `time_sleep.deskryptory_widoczne` w `alerts.tf`. Cloud Monitoring potwierdza
     # utworzenie deskryptora metryki, ZANIM stanie się on widoczny dla walidacji polityk alertów (zmierzone:
