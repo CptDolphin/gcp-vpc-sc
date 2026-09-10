@@ -116,7 +116,7 @@ run "promocja_jest_addytywna" {
 
   assert {
     condition     = length(local.members) > 0
-    error_message = "Brak członków do przetestowania — przykładowy wpis zniknął z perimeter/projects.yaml."
+    error_message = "Brak czlonkow do przetestowania. Na wdrozeniu jest to stan PRZEJSCIOWY: install.sh USUWA czlonka przykladowego z premedytacja, wiec dodaj pierwszego czlonka w dry-run (docs/1-wdrozenie.md, Etap 5). W samym starterze oznacza to, ze selftest jedzie bez --zachowaj-przyklad."
   }
 }
 
@@ -189,12 +189,26 @@ run "baseline_ma_zrodlo" {
 run "renderer_liczy_reguly_z_profili" {
   command = plan
 
+  # PRZEDMIOT PRZED ARYTMETYKĄ. Wdrożenie świeżo rozpakowane `install.sh`-em ma `local.members` PUSTY
+  # z premedytacją (członek przykładowy nie jedzie do wdrożenia), a kod renderujący jest tego świadomy:
+  # `baseline_rules_all` ma wprost `if length(local.members) > 0`. Ta asercja mówi więc to samo, co dwie
+  # w blokach wyżej, i mówi to PIERWSZA — inaczej czytelnik dostaje awarię arytmetyki zamiast informacji
+  # o braku wsadu.
   assert {
-    condition = length(local.ingress_rules_all) == sum([
-      for mkey, m in local.members : sum([
+    condition     = length(local.members) > 0
+    error_message = "Wdrozenie bez ani jednego czlonka: renderowanie profili nie ma czego liczyc. To jest stan PRZEJSCIOWY zaraz po install.sh — dodaj pierwszego czlonka w dry-run (docs/1-wdrozenie.md, Etap 5)."
+  }
+
+  # `concat([0], …)` NIE jest tu ozdobą: `sum([])` jest BŁĘDEM EWALUACJI, nie zerem. Bez tego na pustym
+  # zbiorze członków cały przebieg wywracał się komunikatem `cannot sum an empty list` — czyli awarią
+  # arytmetyki w miejscu, w którym problemem jest brak wsadu, a diagnoza trafiała w złe miejsce. Ta sama
+  # ochrona stoi już w liczniku budżetu atrybutów niżej i w `locals.tf` — TU jej brakowało.
+  assert {
+    condition = length(local.ingress_rules_all) == sum(concat([0], [
+      for mkey, m in local.members : sum(concat([0], [
         for p in m.profiles : length(lookup(local.profiles[p.name], "ingress", []))
-      ])
-    ])
+      ]))
+    ]))
     error_message = "Liczba wyrenderowanych reguł ingress nie zgadza się z sumą reguł z profili członków."
   }
 }
